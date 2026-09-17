@@ -7,12 +7,13 @@ class AudioPlayer {
         this.cumulativeTextLength = 0;
         this.isBuffering = true;
         this.lastChunkTime = 0;
+        this.leftoverBytes = null;
     }
 
     init() {
         if (!this.context) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            this.context = new AudioContext();
+            this.context = new AudioContext({ sampleRate: 24000 });
         }
         if (this.context.state === 'suspended') {
             this.context.resume();
@@ -30,14 +31,37 @@ class AudioPlayer {
             this.lastChunkTime = arrivalTime;
 
             const binaryString = window.atob(base64Audio);
-            const len = binaryString.length;
+            
+            // Combine with any leftover bytes from the previous chunk
+            let len = binaryString.length;
+            if (this.leftoverBytes) {
+                len += this.leftoverBytes.length;
+            }
+            
             const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+            let offset = 0;
+            
+            if (this.leftoverBytes) {
+                bytes.set(this.leftoverBytes);
+                offset = this.leftoverBytes.length;
+                this.leftoverBytes = null;
+            }
+            
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[offset + i] = binaryString.charCodeAt(i);
             }
 
             // Cartesia sends raw 16-bit PCM at 24000 Hz.
-            const int16View = new Int16Array(bytes.buffer);
+            // If the chunk is an odd number of bytes, save the last byte for the next chunk
+            let processBytes = bytes;
+            if (bytes.length % 2 !== 0) {
+                this.leftoverBytes = new Uint8Array([bytes[bytes.length - 1]]);
+                processBytes = new Uint8Array(bytes.buffer, 0, bytes.length - 1);
+            }
+
+            if (processBytes.length === 0) return;
+
+            const int16View = new Int16Array(processBytes.buffer, 0, processBytes.length / 2);
             const float32Data = new Float32Array(int16View.length);
             for (let i = 0; i < int16View.length; i++) {
                 float32Data[i] = int16View[i] / 32768.0;
@@ -98,6 +122,7 @@ class AudioPlayer {
         // Reset state for next turn
         this.isBuffering = true;
         this.lastChunkTime = 0;
+        this.leftoverBytes = null;
     }
 
     stopImmediately() {
@@ -110,6 +135,7 @@ class AudioPlayer {
         this.nextPlayTime = 0;
         this.isBuffering = true;
         this.lastChunkTime = 0;
+        this.leftoverBytes = null;
         return this.cumulativeTextLength;
     }
 
@@ -124,6 +150,7 @@ class AudioPlayer {
         this.cumulativeTextLength = 0;
         this.isBuffering = true;
         this.lastChunkTime = 0;
+        this.leftoverBytes = null;
     }
 }
 
