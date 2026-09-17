@@ -13,6 +13,9 @@ class AudioPlayer {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.context = new AudioContext();
         }
+        if (this.context.state === 'suspended') {
+            this.context.resume();
+        }
     }
 
     async enqueueChunk(base64Audio, textLength) {
@@ -26,7 +29,17 @@ class AudioPlayer {
                 bytes[i] = binaryString.charCodeAt(i);
             }
 
-            const audioBuffer = await this.context.decodeAudioData(bytes.buffer);
+            // Cartesia sends raw 16-bit PCM at 8000 Hz. decodeAudioData expects a full WAV/MP3 file with a header.
+            // We must manually convert the raw PCM to Float32 for the Web Audio API.
+            const int16View = new Int16Array(bytes.buffer);
+            const float32Data = new Float32Array(int16View.length);
+            for (let i = 0; i < int16View.length; i++) {
+                float32Data[i] = int16View[i] / 32768.0;
+            }
+
+            const audioBuffer = this.context.createBuffer(1, float32Data.length, 8000);
+            audioBuffer.copyToChannel(float32Data, 0);
+
             this.playQueue.push({ buffer: audioBuffer, textLength });
 
             if (!this.isPlaying) {
