@@ -34,6 +34,7 @@ const VoiceSessionPage = () => {
         },
         onTurnEnd: () => {
             // End of assistant turn
+            audioPlayer.flush();
         },
         onError: (err) => {
             setErrorMsg(err);

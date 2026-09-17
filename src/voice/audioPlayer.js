@@ -5,6 +5,8 @@ class AudioPlayer {
         this.activeSources = [];
         this.nextPlayTime = 0;
         this.cumulativeTextLength = 0;
+        this.isBuffering = true;
+        this.lastChunkTime = 0;
     }
 
     init() {
@@ -21,6 +23,12 @@ class AudioPlayer {
         if (!this.context) return;
 
         try {
+            const arrivalTime = performance.now();
+            if (this.lastChunkTime) {
+                console.log(`[JitterBuffer] Chunk arrived ${Math.round(arrivalTime - this.lastChunkTime)}ms after previous`);
+            }
+            this.lastChunkTime = arrivalTime;
+
             const binaryString = window.atob(base64Audio);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
@@ -39,6 +47,14 @@ class AudioPlayer {
             audioBuffer.copyToChannel(float32Data, 0);
 
             this.playQueue.push({ buffer: audioBuffer, textLength });
+            
+            // Jitter buffer: Wait for 2 chunks before starting playback
+            if (this.isBuffering && this.playQueue.length < 2) {
+                console.log(`[JitterBuffer] Buffering chunk ${this.playQueue.length}/2...`);
+                return;
+            }
+            
+            this.isBuffering = false;
             this._scheduleNext();
             
         } catch (err) {
@@ -49,7 +65,7 @@ class AudioPlayer {
     _scheduleNext() {
         // Ensure we don't fall behind currentTime
         if (this.nextPlayTime < this.context.currentTime) {
-            this.nextPlayTime = this.context.currentTime;
+            this.nextPlayTime = this.context.currentTime + 0.05; // tiny buffer if we fell behind
         }
 
         while (this.playQueue.length > 0) {
@@ -59,6 +75,7 @@ class AudioPlayer {
             source.buffer = nextItem.buffer;
             source.connect(this.context.destination);
 
+            console.log(`[Playback] Scheduling chunk to play at ${this.nextPlayTime.toFixed(3)}s (Current: ${this.context.currentTime.toFixed(3)}s)`);
             source.start(this.nextPlayTime);
             this.nextPlayTime += nextItem.buffer.duration;
 
@@ -72,6 +89,17 @@ class AudioPlayer {
         }
     }
 
+    flush() {
+        if (this.isBuffering) {
+            console.log(`[JitterBuffer] Turn ended. Flushing remaining buffer...`);
+            this.isBuffering = false;
+            this._scheduleNext();
+        }
+        // Reset state for next turn
+        this.isBuffering = true;
+        this.lastChunkTime = 0;
+    }
+
     stopImmediately() {
         for (const source of this.activeSources) {
             source.onended = null; // Prevent adding to cumulativeTextLength on manual stop
@@ -80,6 +108,8 @@ class AudioPlayer {
         this.activeSources = [];
         this.playQueue = [];
         this.nextPlayTime = 0;
+        this.isBuffering = true;
+        this.lastChunkTime = 0;
         return this.cumulativeTextLength;
     }
 
@@ -92,6 +122,8 @@ class AudioPlayer {
         this.playQueue = [];
         this.nextPlayTime = 0;
         this.cumulativeTextLength = 0;
+        this.isBuffering = true;
+        this.lastChunkTime = 0;
     }
 }
 
