@@ -2,10 +2,9 @@ class AudioPlayer {
     constructor() {
         this.context = null;
         this.playQueue = [];
-        this.isPlaying = false;
-        this.currentSource = null;
+        this.activeSources = [];
+        this.nextPlayTime = 0;
         this.cumulativeTextLength = 0;
-        this.currentTextLength = 0;
     }
 
     init() {
@@ -29,72 +28,70 @@ class AudioPlayer {
                 bytes[i] = binaryString.charCodeAt(i);
             }
 
-            // Cartesia sends raw 16-bit PCM at 8000 Hz. decodeAudioData expects a full WAV/MP3 file with a header.
-            // We must manually convert the raw PCM to Float32 for the Web Audio API.
+            // Cartesia sends raw 16-bit PCM at 24000 Hz.
             const int16View = new Int16Array(bytes.buffer);
             const float32Data = new Float32Array(int16View.length);
             for (let i = 0; i < int16View.length; i++) {
                 float32Data[i] = int16View[i] / 32768.0;
             }
 
-            const audioBuffer = this.context.createBuffer(1, float32Data.length, 8000);
+            const audioBuffer = this.context.createBuffer(1, float32Data.length, 24000);
             audioBuffer.copyToChannel(float32Data, 0);
 
             this.playQueue.push({ buffer: audioBuffer, textLength });
-
-            if (!this.isPlaying) {
-                this._playNext();
-            }
+            this._scheduleNext();
+            
         } catch (err) {
             console.error("Error decoding audio chunk", err);
         }
     }
 
-    _playNext() {
-        if (this.playQueue.length === 0) {
-            this.isPlaying = false;
-            this.currentSource = null;
-            return;
+    _scheduleNext() {
+        // Ensure we don't fall behind currentTime
+        if (this.nextPlayTime < this.context.currentTime) {
+            this.nextPlayTime = this.context.currentTime;
         }
 
-        this.isPlaying = true;
-        const nextItem = this.playQueue.shift();
-        this.currentTextLength = nextItem.textLength || 0;
+        while (this.playQueue.length > 0) {
+            const nextItem = this.playQueue.shift();
 
-        const source = this.context.createBufferSource();
-        source.buffer = nextItem.buffer;
-        source.connect(this.context.destination);
+            const source = this.context.createBufferSource();
+            source.buffer = nextItem.buffer;
+            source.connect(this.context.destination);
 
-        source.onended = () => {
-            this.cumulativeTextLength += this.currentTextLength;
-            this._playNext();
-        };
+            source.start(this.nextPlayTime);
+            this.nextPlayTime += nextItem.buffer.duration;
 
-        source.start(0);
-        this.currentSource = source;
+            source.onended = () => {
+                this.cumulativeTextLength += (nextItem.textLength || 0);
+                // Clean up active sources array to prevent memory leaks
+                this.activeSources = this.activeSources.filter(s => s !== source);
+            };
+
+            this.activeSources.push(source);
+        }
     }
 
     stopImmediately() {
-        if (this.currentSource) {
-            this.currentSource.onended = null;
-            this.currentSource.stop();
-            this.currentSource = null;
+        for (const source of this.activeSources) {
+            source.onended = null; // Prevent adding to cumulativeTextLength on manual stop
+            try { source.stop(); } catch (e) {}
         }
+        this.activeSources = [];
         this.playQueue = [];
-        this.isPlaying = false;
+        this.nextPlayTime = 0;
         return this.cumulativeTextLength;
     }
 
     reset() {
-        if (this.currentSource) {
-            this.currentSource.onended = null;
-            this.currentSource.stop();
+        for (const source of this.activeSources) {
+            source.onended = null;
+            try { source.stop(); } catch (e) {}
         }
+        this.activeSources = [];
         this.playQueue = [];
-        this.isPlaying = false;
-        this.currentSource = null;
+        this.nextPlayTime = 0;
         this.cumulativeTextLength = 0;
-        this.currentTextLength = 0;
     }
 }
 
