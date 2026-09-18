@@ -602,22 +602,26 @@ const VoiceSessionPage = () => {
 
             {/* Header: Minimal, floating, unobtrusive */}
             <header className="relative z-40 px-6 py-5 flex justify-between items-center" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--bg-base) 90%, transparent), transparent)' }}>
-                <Link 
-                    to="/chats" 
-                    className="flex items-center space-x-2 text-neutral-400 hover:text-white transition-all text-xs font-medium tracking-wider uppercase px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md shadow-xs"
-                >
-                    <ArrowLeft size={15} /> <span>Exit</span>
-                </Link>
+                
+                {/* Left Section: Exit and Mode Selector */}
+                <div className="flex items-center space-x-6">
+                    <Link 
+                        to="/chats" 
+                        className="flex items-center space-x-2 text-neutral-400 hover:text-white transition-all text-xs font-medium tracking-wider uppercase px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md shadow-xs"
+                    >
+                        <ArrowLeft size={15} /> <span>Exit</span>
+                    </Link>
 
-                {/* Unified Mode & Guidance Settings Pill */}
-                <UnifiedModeSelector 
-                    mode={mode} 
-                    onModeChange={handleModeChange} 
-                    isLocked={isLocked} 
-                    onToggleLock={handleToggleLock} 
-                    guidanceMode={guidanceMode}
-                    onGuidanceModeChange={handleGuidanceModeChange}
-                />
+                    {/* Unified Mode & Guidance Settings Pill */}
+                    <UnifiedModeSelector 
+                        mode={mode} 
+                        onModeChange={handleModeChange} 
+                        isLocked={isLocked} 
+                        onToggleLock={handleToggleLock} 
+                        guidanceMode={guidanceMode}
+                        onGuidanceModeChange={handleGuidanceModeChange}
+                    />
+                </div>
 
                 <div className="flex items-center space-x-2">
                     {/* Headphones Advisory (subtle pill) */}
@@ -675,7 +679,7 @@ const VoiceSessionPage = () => {
             </main>
 
             {/* Lower-Middle: Minimal Floating Subtitles / Live Captions */}
-            <div className="relative z-20 px-6 pb-28 flex flex-col items-center justify-end pointer-events-none select-none">
+            <div className="relative z-20 px-6 pb-40 flex flex-col items-center justify-end pointer-events-none select-none h-full">
                 <div className="max-w-2xl w-full flex flex-col items-center text-center space-y-2">
                     {interimText ? (
                         <div className="animate-in fade-in zoom-in-95 duration-200">

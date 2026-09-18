@@ -125,7 +125,7 @@ export const ParticleSphere = ({
         const sphereColors = new Float32Array(SPHERE_COUNT * 3);
 
         const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle
-        const SPHERE_RADIUS = 1.28;
+        const SPHERE_RADIUS = 1.35;
 
         for (let i = 0; i < SPHERE_COUNT; i++) {
             const y = 1 - (i / (SPHERE_COUNT - 1)) * 2; // -1 to 1
@@ -161,11 +161,11 @@ export const ParticleSphere = ({
         sphereGeo.setAttribute('color', new THREE.BufferAttribute(sphereColors, 3));
 
         const sphereMaterial = new THREE.PointsMaterial({
-            size: 0.058,
+            size: 0.085,
             map: particleTexture,
             vertexColors: true,
             transparent: true,
-            opacity: 0.92,
+            opacity: 1.0,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
         });
@@ -206,11 +206,11 @@ export const ParticleSphere = ({
         haloGeo.setAttribute('color', new THREE.BufferAttribute(haloColors, 3));
 
         const haloMaterial = new THREE.PointsMaterial({
-            size: 0.046,
+            size: 0.065,
             map: particleTexture,
             vertexColors: true,
             transparent: true,
-            opacity: 0.75,
+            opacity: 0.9,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
         });
