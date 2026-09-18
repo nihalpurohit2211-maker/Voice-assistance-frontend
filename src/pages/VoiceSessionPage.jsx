@@ -198,6 +198,7 @@ const VoiceSessionPage = () => {
         }
         if (window.speechSynthesis) {
             window.speechSynthesis.cancel();
+            window.speechSynthesis.resume();
         }
     }, []);
 
@@ -304,6 +305,9 @@ const VoiceSessionPage = () => {
                 const cleaned = cleanTextForSpeech(text);
                 if (cleaned) {
                     browserTtsQueueRef.current.push(cleaned);
+                    if (window.speechSynthesis && window.speechSynthesis.paused) {
+                        window.speechSynthesis.resume();
+                    }
                     if (!isSpeakingBrowserTtsRef.current) {
                         playNextBrowserSentence();
                     }
@@ -441,6 +445,21 @@ const VoiceSessionPage = () => {
         setErrorMsg('');
         setLogs([]);
         audioPlayer.init();
+
+        // Prime and unlock speech synthesis during direct user click (essential for HTTPS / mobile / Chrome)
+        if (window.speechSynthesis) {
+            try {
+                window.speechSynthesis.cancel();
+                const warmUp = new SpeechSynthesisUtterance(' ');
+                warmUp.volume = 0;
+                warmUp.rate = 2.0;
+                window.speechSynthesis.speak(warmUp);
+                window.speechSynthesis.resume();
+            } catch (e) {
+                console.warn('[TTS] warm-up failed:', e);
+            }
+        }
+
         connect();
         setIsSessionActive(true);
         setAiState('listening');
