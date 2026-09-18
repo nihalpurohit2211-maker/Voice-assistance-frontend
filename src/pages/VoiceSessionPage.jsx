@@ -6,12 +6,112 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Mic, MicOff, Settings2, Activity, Square, Play, Waves } from 'lucide-react';
 import { ModeIndicatorBar } from '../components/ModeIndicatorBar';
 
+export const SPEED_OPTIONS = [0.8, 1.0, 1.25, 1.5];
+
+export const cleanTextForSpeech = (text) => {
+    if (!text) return '';
+    return text
+        // Remove bracketed intent tags like [casual], [focused], [reflective], [playful], [small_talk], etc.
+        .replace(/\[[a-zA-Z0-9_\s-]+\]/g, '')
+        // Remove markdown headers
+        .replace(/^#+\s+/gm, '')
+        // Remove markdown bold/italic syntax **word** or *word* or __word__ or _word_
+        .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, '$1')
+        // Remove markdown code blocks and inline code
+        .replace(/`{1,3}[^`]*`{1,3}/g, '')
+        // Remove markdown link syntax [text](url) -> text
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        // Remove bullet markers and dashes at line start
+        .replace(/^[\s*-]+(?=\w)/gm, '')
+        // Remove emojis and symbols so SAPI / Web Speech doesn't awkwardly read symbol descriptions aloud
+        .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+        // Normalize multiple spaces / linebreaks into a single space
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+export const findBestVoice = (voices, preferredVoiceName) => {
+    if (!voices || voices.length === 0) return null;
+    
+    // 1. Explicit user selection
+    if (preferredVoiceName) {
+        const found = voices.find(v => v.name === preferredVoiceName);
+        if (found) return found;
+    }
+
+    // 2. High-quality Natural/Neural English voices (Edge / Windows 11 modern online voices)
+    const naturalEn = voices.find(v => 
+        (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Online')) && 
+        (v.lang.startsWith('en') || v.lang.includes('US') || v.lang.includes('GB'))
+    );
+    if (naturalEn) return naturalEn;
+
+    // 3. Google English voices (Chrome)
+    const googleEn = voices.find(v => 
+        v.name.includes('Google') && 
+        (v.lang.startsWith('en') || v.name.includes('US English') || v.name.includes('UK English'))
+    );
+    if (googleEn) return googleEn;
+
+    // 4. Modern non-legacy English voices (actively avoid ancient robotic SAPI voices Zira/David Desktop)
+    const modernEn = voices.find(v => 
+        v.lang.startsWith('en') && 
+        !v.name.includes('Desktop') && 
+        !v.name.includes('David') && 
+        !v.name.includes('Zira') && 
+        !v.name.includes('Mark')
+    );
+    if (modernEn) return modernEn;
+
+    // 5. Any English voice
+    const anyEn = voices.find(v => v.lang.startsWith('en'));
+    if (anyEn) return anyEn;
+
+    // 6. First available voice fallback
+    return voices[0] || null;
+};
+
 const VoiceSessionPage = () => {
     const [logs, setLogs] = useState([]);
     const [isSessionActive, setIsSessionActive] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [useCartesia, setUseCartesia] = useState(false); // default to free browser TTS
+
+    // Speech Speed State (0.8, 1.0, 1.25, 1.5)
+    const [speechSpeed, setSpeechSpeed] = useState(() => {
+        const saved = localStorage.getItem('preferredSpeechSpeed');
+        const parsed = parseFloat(saved);
+        return SPEED_OPTIONS.includes(parsed) ? parsed : 1.0;
+    });
+    const speechSpeedRef = useRef(speechSpeed);
+
+    useEffect(() => {
+        speechSpeedRef.current = speechSpeed;
+    }, [speechSpeed]);
+
+    const handleSpeedChange = (newSpeed) => {
+        setSpeechSpeed(newSpeed);
+        speechSpeedRef.current = newSpeed;
+        localStorage.setItem('preferredSpeechSpeed', String(newSpeed));
+    };
+
+    // Browser Voices State
+    const [availableVoices, setAvailableVoices] = useState([]);
+    const [selectedVoiceName, setSelectedVoiceName] = useState(() => {
+        return localStorage.getItem('preferredVoiceName') || '';
+    });
+    const selectedVoiceNameRef = useRef(selectedVoiceName);
+
+    useEffect(() => {
+        selectedVoiceNameRef.current = selectedVoiceName;
+    }, [selectedVoiceName]);
+
+    const handleVoiceChange = (voiceName) => {
+        setSelectedVoiceName(voiceName);
+        selectedVoiceNameRef.current = voiceName;
+        localStorage.setItem('preferredVoiceName', voiceName);
+    };
     
     // Mode State
     const [mode, setMode] = useState('casual');
@@ -80,49 +180,71 @@ const VoiceSessionPage = () => {
     const browserTtsQueueRef = useRef([]);
     const isSpeakingBrowserTtsRef = useRef(false);
     const pauseTimeoutRef = useRef(null);
+    const activeUtteranceRef = useRef(null);
 
     const cancelBrowserTts = useCallback(() => {
         browserTtsQueueRef.current = [];
         isSpeakingBrowserTtsRef.current = false;
+        activeUtteranceRef.current = null;
         if (pauseTimeoutRef.current) {
             clearTimeout(pauseTimeoutRef.current);
             pauseTimeoutRef.current = null;
         }
-        window.speechSynthesis.cancel();
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
     }, []);
 
     const playNextBrowserSentence = useCallback(() => {
-        if (browserTtsQueueRef.current.length === 0) {
+        if (!window.speechSynthesis || browserTtsQueueRef.current.length === 0) {
             isSpeakingBrowserTtsRef.current = false;
+            activeUtteranceRef.current = null;
             return;
         }
 
         isSpeakingBrowserTtsRef.current = true;
-        const sentenceText = browserTtsQueueRef.current.shift();
+        const rawSentence = browserTtsQueueRef.current.shift();
+        const sentenceText = cleanTextForSpeech(rawSentence);
+
+        if (!sentenceText) {
+            // If cleaned text was empty (e.g. only markdown tokens or intent tags), move to next
+            playNextBrowserSentence();
+            return;
+        }
 
         const utterance = new SpeechSynthesisUtterance(sentenceText);
+        activeUtteranceRef.current = utterance; // Retain reference to prevent Chrome GC bug
+
         const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(v => v.name.includes('Google US') || v.name.includes('Zira')) 
-                       || voices.find(v => v.lang.startsWith('en-US')) 
-                       || voices[0];
-        if (preferred) utterance.voice = preferred;
+        const voiceToUse = findBestVoice(voices, selectedVoiceNameRef.current);
+        if (voiceToUse) {
+            utterance.voice = voiceToUse;
+        }
 
         // Apply distinct audible prosody according to active mode
         const currentMode = activeModeRef.current || 'casual';
+        let baseRate = 1.0;
+        let basePitch = 1.0;
+
         if (currentMode === 'focused') {
-            utterance.rate = 1.18; // brisk and efficient
-            utterance.pitch = 1.0;
+            baseRate = 1.14; // brisk and efficient
+            basePitch = 1.0;
         } else if (currentMode === 'reflective') {
-            utterance.rate = 0.86; // slow, calm and gentle
-            utterance.pitch = 0.95;
+            baseRate = 0.88; // slow, calm and gentle
+            basePitch = 0.98;
         } else if (currentMode === 'playful') {
-            utterance.rate = 1.10; // energetic and expressive
-            utterance.pitch = 1.18;
+            baseRate = 1.06; // energetic and expressive
+            basePitch = 1.10;
         } else {
             // casual
-            utterance.rate = 1.0;  // relaxed natural pace
-            utterance.pitch = 1.0;
+            baseRate = 1.0;  // relaxed natural pace
+            basePitch = 1.0;
         }
+
+        // Scale by user speed preference (0.8, 1.0, 1.25, 1.5)
+        const userSpeed = speechSpeedRef.current || 1.0;
+        utterance.rate = Math.min(Math.max(baseRate * userSpeed, 0.5), 2.0);
+        utterance.pitch = basePitch;
 
         utterance.onboundary = (event) => {
             if (event.name === 'word') {
@@ -131,20 +253,27 @@ const VoiceSessionPage = () => {
         };
 
         utterance.onend = () => {
+            activeUtteranceRef.current = null;
             spokenTextLengthRef.current += sentenceText.length;
             if (browserTtsQueueRef.current.length > 0) {
-                // 150ms natural conversational micro-pause between sentences
-                pauseTimeoutRef.current = setTimeout(() => {
-                    playNextBrowserSentence();
-                }, 150);
+                // Immediate transition to next sentence - no artificial timeout dead-air!
+                playNextBrowserSentence();
             } else {
                 isSpeakingBrowserTtsRef.current = false;
-                setTimeout(() => setAiState('listening'), 400);
+                setTimeout(() => setAiState('listening'), 300);
             }
         };
 
-        utterance.onerror = () => {
-            isSpeakingBrowserTtsRef.current = false;
+        utterance.onerror = (e) => {
+            activeUtteranceRef.current = null;
+            if (e.error !== 'interrupted' && e.error !== 'canceled') {
+                console.warn('Browser TTS utterance error:', e.error);
+            }
+            if (browserTtsQueueRef.current.length > 0) {
+                playNextBrowserSentence();
+            } else {
+                isSpeakingBrowserTtsRef.current = false;
+            }
         };
 
         window.speechSynthesis.speak(utterance);
@@ -163,10 +292,12 @@ const VoiceSessionPage = () => {
                 const isSentenceEnd = Boolean(text && /[.?!]\s*$/.test(text.trim()));
                 audioPlayer.enqueueChunk(audioBase64, text ? text.length + 1 : 0, isSentenceEnd);
             } else if (text && !useCartesia) {
-                // Queue sentence and play with 150ms natural pause between full sentences
-                browserTtsQueueRef.current.push(text);
-                if (!isSpeakingBrowserTtsRef.current) {
-                    playNextBrowserSentence();
+                const cleaned = cleanTextForSpeech(text);
+                if (cleaned) {
+                    browserTtsQueueRef.current.push(cleaned);
+                    if (!isSpeakingBrowserTtsRef.current) {
+                        playNextBrowserSentence();
+                    }
                 }
             }
         },
@@ -214,7 +345,7 @@ const VoiceSessionPage = () => {
             if (!useCartesia) {
                 cancelBrowserTts();
                 const sentences = textToReplay.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [textToReplay];
-                browserTtsQueueRef.current = sentences.map(s => s.trim()).filter(Boolean);
+                browserTtsQueueRef.current = sentences.map(s => cleanTextForSpeech(s)).filter(Boolean);
                 playNextBrowserSentence();
             } else {
                 sendReplayTurn(textToReplay, true);
@@ -316,10 +447,42 @@ const VoiceSessionPage = () => {
     }, []);
 
     useEffect(() => {
-        // Preload voices to ensure they are available when needed
-        const loadVoices = () => window.speechSynthesis.getVoices();
+        const loadVoices = () => {
+            if (!window.speechSynthesis) return;
+            const voices = window.speechSynthesis.getVoices();
+            if (voices && voices.length > 0) {
+                // Sort: English voices first, Natural/Neural first, then alphabetical
+                const sorted = [...voices].sort((a, b) => {
+                    const aEn = a.lang.startsWith('en');
+                    const bEn = b.lang.startsWith('en');
+                    if (aEn && !bEn) return -1;
+                    if (!aEn && bEn) return 1;
+                    const aNat = a.name.includes('Natural') || a.name.includes('Neural');
+                    const bNat = b.name.includes('Natural') || b.name.includes('Neural');
+                    if (aNat && !bNat) return -1;
+                    if (!aNat && bNat) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+                setAvailableVoices(sorted);
+                if (!selectedVoiceNameRef.current) {
+                    const best = findBestVoice(sorted, '');
+                    if (best) {
+                        setSelectedVoiceName(best.name);
+                        selectedVoiceNameRef.current = best.name;
+                    }
+                }
+            }
+        };
+
         loadVoices();
-        window.speechSynthesis.onvoiceschanged = loadVoices;
+        if (window.speechSynthesis) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        return () => {
+            if (window.speechSynthesis) {
+                window.speechSynthesis.onvoiceschanged = null;
+            }
+        };
     }, []);
 
     const handleTextSubmit = (e) => {
@@ -377,6 +540,19 @@ const VoiceSessionPage = () => {
                 />
 
                 <div className="flex items-center space-x-2">
+                    {/* Quick Speed Button */}
+                    <button
+                        onClick={() => {
+                            const nextIdx = (SPEED_OPTIONS.indexOf(speechSpeed) + 1) % SPEED_OPTIONS.length;
+                            handleSpeedChange(SPEED_OPTIONS[nextIdx]);
+                        }}
+                        title="Speech Speed - click to cycle (0.8x, 1x, 1.25x, 1.5x)"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200/60 text-neutral-700 text-xs font-medium transition-all shadow-xs cursor-pointer"
+                    >
+                        <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Speed</span>
+                        <span className="font-semibold text-neutral-900">{speechSpeed}x</span>
+                    </button>
+
                     {errorMsg && (
                         <div className="text-red-500 text-sm font-medium">{errorMsg}</div>
                     )}
@@ -422,8 +598,8 @@ const VoiceSessionPage = () => {
                 <div className="bg-white/80 backdrop-blur-xl border border-neutral-200 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.08)] pointer-events-auto transition-all duration-500 ease-out flex flex-col overflow-hidden w-full max-w-lg">
                     
                     {/* Collapsible Details Panel (slides down from inside the pill when opened) */}
-                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${detailsOpen && isSessionActive ? 'max-h-48 border-b border-neutral-100' : 'max-h-0'}`}>
-                        <div className="p-6 bg-neutral-50/50 flex flex-col justify-around items-center space-y-4">
+                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${detailsOpen && isSessionActive ? 'max-h-[30rem] border-b border-neutral-100' : 'max-h-0'}`}>
+                        <div className="p-5 bg-neutral-50/50 flex flex-col justify-around items-center space-y-4">
                             <div className="flex w-full justify-around items-center">
                                 <div className="text-center">
                                     <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Latency</div>
@@ -440,7 +616,9 @@ const VoiceSessionPage = () => {
                                     <div className="text-sm font-medium text-neutral-800 capitalize">{mode} {isLocked ? '(Locked)' : ''}</div>
                                 </div>
                             </div>
-                            <div className="w-full flex items-center justify-between bg-neutral-100 p-2 rounded-full">
+
+                            {/* Voice Engine Toggle */}
+                            <div className="w-full flex items-center justify-between bg-neutral-100 p-1.5 rounded-full">
                                 <button 
                                     onClick={() => setUseCartesia(false)}
                                     className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${!useCartesia ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
@@ -454,6 +632,43 @@ const VoiceSessionPage = () => {
                                     Cartesia (Premium)
                                 </button>
                             </div>
+
+                            {/* Speech Speed Selector */}
+                            <div className="w-full flex items-center justify-between px-1">
+                                <span className="text-xs text-neutral-500 font-medium">Speed:</span>
+                                <div className="flex items-center space-x-1.5 bg-neutral-100 p-1 rounded-full">
+                                    {SPEED_OPTIONS.map((s) => (
+                                        <button
+                                            key={s}
+                                            onClick={() => handleSpeedChange(s)}
+                                            className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${speechSpeed === s ? 'bg-white shadow-sm text-neutral-900 font-semibold' : 'text-neutral-500 hover:text-neutral-800'}`}
+                                        >
+                                            {s}x
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Browser Voice Selector Dropdown (when Browser Voice is active) */}
+                            {!useCartesia && availableVoices.length > 0 && (
+                                <div className="w-full flex flex-col space-y-1.5 px-1">
+                                    <div className="flex justify-between items-center text-[11px] text-neutral-400 font-medium">
+                                        <span className="uppercase tracking-wider">Browser Voice</span>
+                                        <span>{availableVoices.length} voices</span>
+                                    </div>
+                                    <select
+                                        value={selectedVoiceName}
+                                        onChange={(e) => handleVoiceChange(e.target.value)}
+                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-1.5 text-xs text-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-400 truncate"
+                                    >
+                                        {availableVoices.map((v) => (
+                                            <option key={v.name} value={v.name}>
+                                                {(v.name.includes('Natural') || v.name.includes('Neural')) ? '✨ ' : ''}{v.name} ({v.lang})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     </div>
 
