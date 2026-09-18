@@ -4,6 +4,7 @@ import { useSpeechRecognition } from '../voice/useSpeechRecognition';
 import { audioPlayer } from '../voice/audioPlayer';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Mic, MicOff, Settings2, Activity, Square, Play, Waves } from 'lucide-react';
+import { ModeIndicatorBar } from '../components/ModeIndicatorBar';
 
 const VoiceSessionPage = () => {
     const [logs, setLogs] = useState([]);
@@ -12,9 +13,34 @@ const VoiceSessionPage = () => {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [useCartesia, setUseCartesia] = useState(false); // default to free browser TTS
     
+    // Mode State
+    const [mode, setMode] = useState('casual');
+    const [isLocked, setIsLocked] = useState(false);
+    const activeModeRef = useRef('casual');
+    const isLockedRef = useRef(false);
+    const manualOverrideRef = useRef(false);
+
+    useEffect(() => {
+        activeModeRef.current = mode;
+    }, [mode]);
+
+    useEffect(() => {
+        isLockedRef.current = isLocked;
+    }, [isLocked]);
+
+    const handleModeChange = (newMode) => {
+        setMode(newMode);
+        activeModeRef.current = newMode;
+        manualOverrideRef.current = true;
+    };
+
+    const handleToggleLock = () => {
+        setIsLocked(prev => !prev);
+    };
+
     // AI State: 'idle', 'listening', 'thinking', 'speaking'
     const [aiState, setAiState] = useState('idle');
-    const [metrics, setMetrics] = useState({ ttfb: null, intent: null });
+    const [metrics, setMetrics] = useState({ ttfb: null, intent: null, mode: 'casual' });
     const [textInput, setTextInput] = useState('');
     const logsEndRef = useRef(null);
 
@@ -81,6 +107,23 @@ const VoiceSessionPage = () => {
                        || voices[0];
         if (preferred) utterance.voice = preferred;
 
+        // Apply distinct audible prosody according to active mode
+        const currentMode = activeModeRef.current || 'casual';
+        if (currentMode === 'focused') {
+            utterance.rate = 1.18; // brisk and efficient
+            utterance.pitch = 1.0;
+        } else if (currentMode === 'reflective') {
+            utterance.rate = 0.86; // slow, calm and gentle
+            utterance.pitch = 0.95;
+        } else if (currentMode === 'playful') {
+            utterance.rate = 1.10; // energetic and expressive
+            utterance.pitch = 1.18;
+        } else {
+            // casual
+            utterance.rate = 1.0;  // relaxed natural pace
+            utterance.pitch = 1.0;
+        }
+
         utterance.onboundary = (event) => {
             if (event.name === 'word') {
                 spokenTextLengthRef.current = Math.max(spokenTextLengthRef.current, event.charIndex + event.charLength);
@@ -134,8 +177,15 @@ const VoiceSessionPage = () => {
                 setTimeout(() => setAiState('listening'), 500);
             }
         },
-        onMetrics: (ttfb, intent) => {
-            setMetrics({ ttfb, intent });
+        onMetrics: (ttfb, intent, backendMode) => {
+            setMetrics({ ttfb, intent, mode: backendMode });
+            if (!isLockedRef.current && backendMode) {
+                setMode(backendMode);
+                activeModeRef.current = backendMode;
+            }
+            if (!isLockedRef.current) {
+                manualOverrideRef.current = false;
+            }
         },
         onError: (err) => {
             setErrorMsg(err);
@@ -218,9 +268,12 @@ const VoiceSessionPage = () => {
             wasWaitInterruptedRef.current = false;
             currentTurnReplyRef.current = '';
             addLog('user', text);
-            sendUserTurn(text, useCartesia);
+            const modeToSend = isLockedRef.current 
+                ? activeModeRef.current 
+                : (manualOverrideRef.current ? activeModeRef.current : null);
+            sendUserTurn(text, useCartesia, modeToSend);
             setAiState('thinking');
-            setMetrics({ ttfb: null, intent: null }); 
+            setMetrics(prev => ({ ...prev, ttfb: null, intent: null })); 
         },
         onPermissionDenied: () => {
             setErrorMsg('Microphone permission denied.');
@@ -243,7 +296,7 @@ const VoiceSessionPage = () => {
         audioPlayer.reset();
         setIsSessionActive(false);
         setAiState('idle');
-        setMetrics({ ttfb: null, intent: null });
+        setMetrics({ ttfb: null, intent: null, mode: 'casual' });
     };
 
     useEffect(() => {
@@ -287,9 +340,12 @@ const VoiceSessionPage = () => {
         wasWaitInterruptedRef.current = false;
         currentTurnReplyRef.current = '';
         addLog('user', text);
-        sendUserTurn(text, useCartesia);
+        const modeToSend = isLockedRef.current 
+            ? activeModeRef.current 
+            : (manualOverrideRef.current ? activeModeRef.current : null);
+        sendUserTurn(text, useCartesia, modeToSend);
         setAiState('thinking');
-        setMetrics({ ttfb: null, intent: null }); 
+        setMetrics(prev => ({ ...prev, ttfb: null, intent: null })); 
     };
 
     // Color logic
@@ -307,13 +363,24 @@ const VoiceSessionPage = () => {
         <div className="flex h-screen bg-white text-neutral-900 font-sans overflow-hidden">
             
             {/* Header */}
-            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 bg-gradient-to-b from-white to-transparent">
+            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20 bg-gradient-to-b from-white via-white/80 to-transparent">
                 <Link to="/chats" className="flex items-center space-x-2 text-neutral-400 hover:text-neutral-900 transition-colors">
                     <ArrowLeft size={20} /> <span>Exit</span>
                 </Link>
-                {errorMsg && (
-                    <div className="text-red-500 text-sm font-medium">{errorMsg}</div>
-                )}
+
+                {/* Persistent Mode Indicator Bar with Lock/Unlock */}
+                <ModeIndicatorBar 
+                    mode={mode} 
+                    onModeChange={handleModeChange} 
+                    isLocked={isLocked} 
+                    onToggleLock={handleToggleLock} 
+                />
+
+                <div className="flex items-center space-x-2">
+                    {errorMsg && (
+                        <div className="text-red-500 text-sm font-medium">{errorMsg}</div>
+                    )}
+                </div>
             </div>
 
             {/* Main Chat Canvas */}
@@ -366,6 +433,11 @@ const VoiceSessionPage = () => {
                                 <div className="text-center">
                                     <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Intent</div>
                                     <div className={`text-sm font-medium ${intentColor} capitalize`}>{metrics.intent ? metrics.intent.replace('_', ' ') : '---'}</div>
+                                </div>
+                                <div className="w-px h-10 bg-neutral-200"></div>
+                                <div className="text-center">
+                                    <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Mode</div>
+                                    <div className="text-sm font-medium text-neutral-800 capitalize">{mode} {isLocked ? '(Locked)' : ''}</div>
                                 </div>
                             </div>
                             <div className="w-full flex items-center justify-between bg-neutral-100 p-2 rounded-full">
