@@ -20,6 +20,10 @@ class AudioPlayer {
         }
     }
 
+    get isPlaying() {
+        return this.activeSources.length > 0 || this.playQueue.length > 0;
+    }
+
     async enqueueChunk(base64Audio, textLength) {
         if (!this.context) return;
 
@@ -70,7 +74,7 @@ class AudioPlayer {
             const audioBuffer = this.context.createBuffer(1, float32Data.length, 24000);
             audioBuffer.copyToChannel(float32Data, 0);
 
-            this.playQueue.push({ buffer: audioBuffer, textLength });
+            this.playQueue.push({ buffer: audioBuffer, textLength, isSentenceEnd });
             
             // Jitter buffer: Wait for 2 chunks before starting playback
             if (this.isBuffering && this.playQueue.length < 2) {
@@ -102,6 +106,11 @@ class AudioPlayer {
             console.log(`[Playback] Scheduling chunk to play at ${this.nextPlayTime.toFixed(3)}s (Current: ${this.context.currentTime.toFixed(3)}s)`);
             source.start(this.nextPlayTime);
             this.nextPlayTime += nextItem.buffer.duration;
+
+            // Add 150ms micro-pause between full sentences (not between audio chunks)
+            if (nextItem.isSentenceEnd) {
+                this.nextPlayTime += 0.15;
+            }
 
             source.onended = () => {
                 this.cumulativeTextLength += (nextItem.textLength || 0);

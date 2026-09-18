@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
-export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError }) => {
+export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError, onMetrics }) => {
     const { token } = useContext(AuthContext);
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const wsRef = useRef(null);
@@ -31,6 +31,8 @@ export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError }) => {
                 } else if (msg.type === 'turn_end') {
                     turnInProgressRef.current = false;
                     onTurnEnd();
+                } else if (msg.type === 'metrics') {
+                    if (onMetrics) onMetrics(msg.ttfb, msg.intent);
                 } else if (msg.type === 'error') {
                     onError(msg.message);
                 }
@@ -60,7 +62,7 @@ export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError }) => {
         }
     }, []);
 
-    const sendUserTurn = useCallback((text) => {
+    const sendUserTurn = useCallback((text, use_cartesia = true) => {
         if (connectionStatus !== 'connected' || !wsRef.current) {
             onError('Socket not connected');
             return;
@@ -71,7 +73,7 @@ export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError }) => {
         }
         
         turnInProgressRef.current = true;
-        wsRef.current.send(JSON.stringify({ type: 'user_turn', text }));
+        wsRef.current.send(JSON.stringify({ type: 'user_turn', text, use_cartesia }));
     }, [connectionStatus, onError]);
 
     const sendInterrupt = useCallback((spokenOffset) => {
@@ -81,11 +83,21 @@ export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError }) => {
         }
     }, [connectionStatus]);
 
+    const sendReplayTurn = useCallback((text, use_cartesia = true) => {
+        if (connectionStatus !== 'connected' || !wsRef.current) {
+            onError('Socket not connected');
+            return;
+        }
+        turnInProgressRef.current = true;
+        wsRef.current.send(JSON.stringify({ type: 'replay_turn', text, use_cartesia }));
+    }, [connectionStatus, onError]);
+
     return {
         connect,
         disconnect,
         connectionStatus,
         sendUserTurn,
-        sendInterrupt
+        sendInterrupt,
+        sendReplayTurn
     };
 };
