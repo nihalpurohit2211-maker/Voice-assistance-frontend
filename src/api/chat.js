@@ -1,7 +1,12 @@
 import apiClient from './client';
 
-export const sendChatMessage = async (message, sessionId = null, mode = null) => {
-    const res = await apiClient.post('/chat', { message, session_id: sessionId, mode });
+export const sendChatMessage = async (message, sessionId = null, mode = null, guidanceMode = null) => {
+    const res = await apiClient.post('/chat', { 
+        message, 
+        session_id: sessionId, 
+        mode,
+        guidance_mode: guidanceMode || undefined,
+    });
     return res.data;
 };
 

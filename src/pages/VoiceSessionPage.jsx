@@ -7,6 +7,7 @@ import { ParticleSphere } from '../components/ParticleSphere';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Mic, Settings2, Activity, Square, Headphones, History, X } from 'lucide-react';
 import { ModeIndicatorBar } from '../components/ModeIndicatorBar';
+import { GuidanceModeSelector } from '../components/GuidanceModeSelector';
 
 export const SPEED_OPTIONS = [0.8, 1.0, 1.25, 1.5];
 
@@ -142,6 +143,22 @@ const VoiceSessionPage = () => {
 
     const handleToggleLock = () => {
         setIsLocked(prev => !prev);
+    };
+
+    // Guidance Mode State (wellness sub-mode, separate from tone mode)
+    const [guidanceMode, setGuidanceMode] = useState(() => {
+        return localStorage.getItem('preferredGuidanceMode') || 'none';
+    });
+    const guidanceModeRef = useRef(guidanceMode);
+
+    useEffect(() => {
+        guidanceModeRef.current = guidanceMode;
+    }, [guidanceMode]);
+
+    const handleGuidanceModeChange = (newGuidanceMode) => {
+        setGuidanceMode(newGuidanceMode);
+        guidanceModeRef.current = newGuidanceMode;
+        localStorage.setItem('preferredGuidanceMode', newGuidanceMode);
     };
 
     // AI State: 'idle', 'listening', 'thinking', 'speaking'
@@ -431,7 +448,8 @@ const VoiceSessionPage = () => {
             const modeToSend = isLockedRef.current 
                 ? activeModeRef.current 
                 : (manualOverrideRef.current ? activeModeRef.current : null);
-            sendUserTurn(text, useCartesia, modeToSend);
+            const guidanceModeToSend = guidanceModeRef.current !== 'none' ? guidanceModeRef.current : null;
+            sendUserTurn(text, useCartesia, modeToSend, guidanceModeToSend);
             setAiState('thinking');
             setMetrics(prev => ({ ...prev, ttfb: null, intent: null })); 
         },
@@ -550,7 +568,8 @@ const VoiceSessionPage = () => {
         const modeToSend = isLockedRef.current 
             ? activeModeRef.current 
             : (manualOverrideRef.current ? activeModeRef.current : null);
-        sendUserTurn(text, useCartesia, modeToSend);
+        const guidanceModeToSend = guidanceModeRef.current !== 'none' ? guidanceModeRef.current : null;
+        sendUserTurn(text, useCartesia, modeToSend, guidanceModeToSend);
         setAiState('thinking');
         setMetrics(prev => ({ ...prev, ttfb: null, intent: null })); 
     };
@@ -591,12 +610,18 @@ const VoiceSessionPage = () => {
                 </Link>
 
                 {/* Persistent Mode Indicator Bar with Lock/Unlock */}
-                <ModeIndicatorBar 
-                    mode={mode} 
-                    onModeChange={handleModeChange} 
-                    isLocked={isLocked} 
-                    onToggleLock={handleToggleLock} 
-                />
+                <div className="flex items-center space-x-2">
+                    <ModeIndicatorBar 
+                        mode={mode} 
+                        onModeChange={handleModeChange} 
+                        isLocked={isLocked} 
+                        onToggleLock={handleToggleLock} 
+                    />
+                    <GuidanceModeSelector
+                        guidanceMode={guidanceMode}
+                        onGuidanceModeChange={handleGuidanceModeChange}
+                    />
+                </div>
 
                 <div className="flex items-center space-x-2">
                     {/* Headphones Advisory (subtle pill) */}
@@ -672,6 +697,16 @@ const VoiceSessionPage = () => {
                         <div className="flex items-center space-x-2 text-xs tracking-widest uppercase font-medium text-neutral-400/80">
                             <span className="w-2 h-2 rounded-full bg-sky-400/80 animate-ping"></span>
                             <span>Listening... speak anytime</span>
+                        </div>
+                    )}
+
+                    {/* Guidance Mode Disclaimer Badge — only shown when a guidance mode is active */}
+                    {guidanceMode && guidanceMode !== 'none' && (
+                        <div className="animate-in fade-in duration-300 mt-2">
+                            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-500/25 text-amber-400/80 text-[11px] font-medium backdrop-blur-md">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 flex-shrink-0"></span>
+                                <span>General wellness info — not professional advice</span>
+                            </span>
                         </div>
                     )}
                 </div>

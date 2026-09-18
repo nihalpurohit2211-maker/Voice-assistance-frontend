@@ -62,7 +62,7 @@ export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError, onMetrics }) 
         }
     }, []);
 
-    const sendUserTurn = useCallback((text, use_cartesia = true, mode = null) => {
+    const sendUserTurn = useCallback((text, use_cartesia = true, mode = null, guidance_mode = null) => {
         if (connectionStatus !== 'connected' || !wsRef.current) {
             onError('Socket not connected');
             return;
@@ -73,7 +73,7 @@ export const useVoiceSocket = ({ onReplyChunk, onTurnEnd, onError, onMetrics }) 
         }
         
         turnInProgressRef.current = true;
-        wsRef.current.send(JSON.stringify({ type: 'user_turn', text, use_cartesia, mode }));
+        wsRef.current.send(JSON.stringify({ type: 'user_turn', text, use_cartesia, mode, guidance_mode }));
     }, [connectionStatus, onError]);
 
     const sendInterrupt = useCallback((spokenOffset) => {

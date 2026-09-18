@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { sendChatMessage } from '../api/chat';
 import { ModeIndicatorBar } from '../components/ModeIndicatorBar';
+import { GuidanceModeSelector } from '../components/GuidanceModeSelector';
 
 const TextChatPage = () => {
     const [messages, setMessages] = useState([]);
@@ -8,6 +9,9 @@ const TextChatPage = () => {
     const [sessionId, setSessionId] = useState(null);
     const [mode, setMode] = useState('casual');
     const [isLocked, setIsLocked] = useState(false);
+    const [guidanceMode, setGuidanceMode] = useState(() => {
+        return localStorage.getItem('preferredGuidanceMode') || 'none';
+    });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const manualOverrideRef = useRef(false);
@@ -21,6 +25,11 @@ const TextChatPage = () => {
         setIsLocked(prev => !prev);
     };
 
+    const handleGuidanceModeChange = (newGuidanceMode) => {
+        setGuidanceMode(newGuidanceMode);
+        localStorage.setItem('preferredGuidanceMode', newGuidanceMode);
+    };
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim()) return;
@@ -32,9 +41,10 @@ const TextChatPage = () => {
         setError('');
 
         const modeToSend = isLocked ? mode : (manualOverrideRef.current ? mode : null);
+        const guidanceModeToSend = guidanceMode !== 'none' ? guidanceMode : null;
 
         try {
-            const data = await sendChatMessage(userText, sessionId, modeToSend);
+            const data = await sendChatMessage(userText, sessionId, modeToSend, guidanceModeToSend);
             if (data.session_id) {
                 setSessionId(data.session_id);
             }
@@ -64,13 +74,17 @@ const TextChatPage = () => {
     return (
         <div className="max-w-3xl mx-auto p-4 flex flex-col h-screen">
             <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 flex-wrap gap-y-2">
                     <h1 className="text-xl font-bold">Text Chat</h1>
                     <ModeIndicatorBar 
                         mode={mode} 
                         onModeChange={handleModeChange} 
                         isLocked={isLocked} 
                         onToggleLock={handleToggleLock} 
+                    />
+                    <GuidanceModeSelector
+                        guidanceMode={guidanceMode}
+                        onGuidanceModeChange={handleGuidanceModeChange}
                     />
                 </div>
                 <button 
@@ -80,6 +94,15 @@ const TextChatPage = () => {
                     New Session
                 </button>
             </div>
+
+            {/* Guidance mode disclaimer */}
+            {guidanceMode && guidanceMode !== 'none' && (
+                <div className="mb-3 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium flex items-center space-x-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"></span>
+                    <span>General wellness info — not professional advice</span>
+                </div>
+            )}
+
             {error && <div className="text-red-600 bg-red-100 p-2 mb-4">{error}</div>}
             
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 border p-4 rounded bg-white">
