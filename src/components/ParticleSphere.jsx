@@ -105,7 +105,7 @@ export const ParticleSphere = ({
         const sphereColors = new Float32Array(SPHERE_COUNT * 3);
 
         const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle ~2.3999
-        const SPHERE_RADIUS = 0.95;
+        const SPHERE_RADIUS = 1.28;
 
         for (let i = 0; i < SPHERE_COUNT; i++) {
             const y = 1 - (i / (SPHERE_COUNT - 1)) * 2; // -1 to 1
@@ -142,7 +142,7 @@ export const ParticleSphere = ({
         sphereGeo.setAttribute('color', new THREE.BufferAttribute(sphereColors, 3));
 
         const sphereMaterial = new THREE.PointsMaterial({
-            size: 0.052,
+            size: 0.058,
             map: particleTexture,
             vertexColors: true,
             transparent: true,
@@ -165,10 +165,10 @@ export const ParticleSphere = ({
 
         for (let i = 0; i < HALO_COUNT; i++) {
             const angle = (i / HALO_COUNT) * Math.PI * 2;
-            const r = 1.4 + (Math.sin(i * 11) * 0.5 + 0.5) * 0.35; // proportional halo ring
+            const r = 1.85 + (Math.sin(i * 11) * 0.5 + 0.5) * 0.45; // proportional halo ring
             const hx = Math.cos(angle) * r;
             const hz = Math.sin(angle) * r;
-            const hy = Math.sin(angle * 3) * 0.10 + (Math.sin(i * 13) * 0.05);
+            const hy = Math.sin(angle * 3) * 0.12 + (Math.sin(i * 13) * 0.06);
 
             haloBasePositions[i * 3] = hx;
             haloBasePositions[i * 3 + 1] = hy;
@@ -187,7 +187,7 @@ export const ParticleSphere = ({
         haloGeo.setAttribute('color', new THREE.BufferAttribute(haloColors, 3));
 
         const haloMaterial = new THREE.PointsMaterial({
-            size: 0.042,
+            size: 0.046,
             map: particleTexture,
             vertexColors: true,
             transparent: true,
@@ -212,7 +212,7 @@ export const ParticleSphere = ({
             blending: THREE.AdditiveBlending,
         });
         const coreSprite = new THREE.Sprite(coreMaterial);
-        coreSprite.scale.set(1.65, 1.65, 1.0);
+        coreSprite.scale.set(2.1, 2.1, 1.0);
         scene.add(coreSprite);
 
         // Dynamic State Tracking
@@ -280,7 +280,7 @@ export const ParticleSphere = ({
             const source = audioData.source || 'idle';
 
             // Core glow scale breathing & pulsing
-            const baseGlowScale = 1.65 + Math.sin(elapsed * 1.3) * 0.05;
+            const baseGlowScale = 2.1 + Math.sin(elapsed * 1.3) * 0.06;
             const audioGlowPulse = vol * 0.25;
             coreSprite.scale.set(baseGlowScale + audioGlowPulse, baseGlowScale + audioGlowPulse, 1.0);
             coreMaterial.opacity = 0.22 + vol * 0.18;

@@ -282,6 +282,9 @@ const VoiceSessionPage = () => {
             }
         };
 
+        if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+        }
         window.speechSynthesis.speak(utterance);
     }, []);
 
@@ -367,9 +370,25 @@ const VoiceSessionPage = () => {
             if (hasInterruptedCurrentTurnRef.current) {
                 return;
             }
+
+            const lowerText = text.toLowerCase().trim();
+            const isWait = lowerText.includes('wait');
+            const isInterruptWord = ['wait', 'stop', 'hold', 'pause', 'quiet', 'shut up', 'cancel'].some(kw => lowerText.includes(kw));
+
+            // Acoustic echo check: If the recognized words match the assistant's own current output, ignore it!
+            if (aiState === 'speaking' && !isInterruptWord && currentTurnReplyRef.current) {
+                const words = lowerText.replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+                if (words.length > 0) {
+                    const matchCount = words.filter(w => currentTurnReplyRef.current.toLowerCase().includes(w)).length;
+                    if (matchCount / words.length > 0.4) {
+                        console.log("[Echo Prevention] Ignoring microphone pickup of assistant's own voice:", text);
+                        return;
+                    }
+                }
+            }
+
             hasInterruptedCurrentTurnRef.current = true;
 
-            const isWait = text.toLowerCase().includes('wait');
             if (aiState === 'speaking' && isWait) {
                 wasWaitInterruptedRef.current = true;
                 lastFullReplyRef.current = currentTurnReplyRef.current.trim();
@@ -600,7 +619,7 @@ const VoiceSessionPage = () => {
             </header>
 
             {/* Central Visual Centerpiece: The Audio-Reactive 3D Particle Sphere */}
-            <main className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+            <main className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none -translate-y-16 md:-translate-y-20">
                 <div className="w-full h-full max-w-5xl max-h-[82vh] relative flex items-center justify-center">
                     <ParticleSphere 
                         mode={mode} 
