@@ -26,21 +26,21 @@ const RegisterPage = () => {
     };
 
     return (
-        <div className="min-h-screen w-screen bg-[#090b10] text-neutral-100 flex items-center justify-center p-4 relative overflow-hidden font-sans selection:bg-sky-500/30">
+        <div className="min-h-screen w-screen text-neutral-100 flex items-center justify-center p-4 relative overflow-hidden font-sans" style={{ backgroundColor: 'var(--bg-base)' }}>
             {/* Ambient Background Radial Glows */}
             <div 
                 className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full pointer-events-none opacity-20 blur-3xl"
-                style={{ background: 'radial-gradient(circle, #10b981 0%, #06b6d4 50%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(circle, var(--mode-playful) 0%, transparent 70%)' }}
             />
             <div 
                 className="absolute bottom-10 left-10 w-72 h-72 rounded-full pointer-events-none opacity-15 blur-3xl"
-                style={{ background: 'radial-gradient(circle, #38bdf8 0%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(circle, var(--mode-casual) 0%, transparent 70%)' }}
             />
 
             <div className="max-w-md w-full relative z-10">
                 {/* Brand / Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/5 border border-white/10 shadow-[0_0_20px_rgba(16,185,129,0.2)] mb-4">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/5 border border-white/10 mb-4" style={{ boxShadow: '0 0 20px color-mix(in srgb, var(--mode-playful) 25%, transparent)' }}>
                         <Sparkles size={24} className="text-emerald-400 animate-pulse" />
                     </div>
                     <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-white">

@@ -1,0 +1,23 @@
+/* Design Tokens */
+:root {
+  --bg-base: #0a0a0f;
+  --bg-surface: #14141c;
+  --bg-elevated: #1c1c26;
+  --text-primary: #f5f5f7;
+  --text-secondary: #9a9aa8;
+  --text-muted: #5c5c68;
+  --border-subtle: #26262f;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --mode-casual: #5B8DEF;
+  --mode-focused: #E0913D;
+  --mode-reflective: #8B6FE0;
+  --mode-playful: #4FC98A;
+  --mode-guidance: #D4536B;
+
+  /* Semantic status colors (flagged in Task 1 output) */
+  --status-danger: #ef4444;
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+}

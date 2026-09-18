@@ -5,9 +5,8 @@ import { audioPlayer } from '../voice/audioPlayer';
 import { useAudioAnalyzer } from '../voice/useAudioAnalyzer';
 import { ParticleSphere } from '../components/ParticleSphere';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Mic, Settings2, Activity, Square, Headphones, History, X } from 'lucide-react';
-import { ModeIndicatorBar } from '../components/ModeIndicatorBar';
-import { GuidanceModeSelector } from '../components/GuidanceModeSelector';
+import { ArrowLeft, Mic, Settings2, Activity, Square, Headphones, History, X, Sliders } from 'lucide-react';
+import { UnifiedModeSelector } from '../components/UnifiedModeSelector';
 
 export const SPEED_OPTIONS = [0.8, 1.0, 1.25, 1.5];
 
@@ -81,6 +80,7 @@ const VoiceSessionPage = () => {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [useCartesia, setUseCartesia] = useState(false); // default to free browser TTS
     const [transcriptDrawerOpen, setTranscriptDrawerOpen] = useState(false);
+    const [drawerTab, setDrawerTab] = useState('transcript'); // 'transcript' | 'telemetry'
 
     // Audio Visualizer data hook (connects mic and AI audio to ParticleSphere)
     const { getVisualizerData } = useAudioAnalyzer(isSessionActive);
@@ -590,18 +590,18 @@ const VoiceSessionPage = () => {
     const intentColor = metrics.intent ? getIntentColor(metrics.intent) : 'text-neutral-400';
 
     return (
-        <div className="relative h-screen w-screen bg-[#090b10] text-neutral-100 font-sans overflow-hidden flex flex-col justify-between selection:bg-sky-500/30">
+        <div className="relative h-screen w-screen text-neutral-100 font-sans overflow-hidden flex flex-col justify-between" style={{ backgroundColor: 'var(--bg-base)' }}>
             
             {/* Subtle Ambient Radial Vignette behind the sphere */}
             <div 
                 className="absolute inset-0 pointer-events-none z-0 opacity-40 transition-opacity duration-1000"
                 style={{
-                    background: 'radial-gradient(circle at 50% 48%, rgba(30, 41, 59, 0.4) 0%, rgba(9, 11, 16, 0.95) 70%, rgba(9, 11, 16, 1) 100%)'
+                    background: 'radial-gradient(circle at 50% 48%, rgba(30, 41, 59, 0.4) 0%, var(--bg-base) 70%, var(--bg-base) 100%)'
                 }}
             />
 
             {/* Header: Minimal, floating, unobtrusive */}
-            <header className="relative z-30 px-6 py-5 flex justify-between items-center bg-gradient-to-b from-[#090b10]/90 via-[#090b10]/50 to-transparent">
+            <header className="relative z-30 px-6 py-5 flex justify-between items-center" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--bg-base) 90%, transparent), transparent)' }}>
                 <Link 
                     to="/chats" 
                     className="flex items-center space-x-2 text-neutral-400 hover:text-white transition-all text-xs font-medium tracking-wider uppercase px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md shadow-xs"
@@ -609,19 +609,15 @@ const VoiceSessionPage = () => {
                     <ArrowLeft size={15} /> <span>Exit</span>
                 </Link>
 
-                {/* Persistent Mode Indicator Bar with Lock/Unlock */}
-                <div className="flex items-center space-x-2">
-                    <ModeIndicatorBar 
-                        mode={mode} 
-                        onModeChange={handleModeChange} 
-                        isLocked={isLocked} 
-                        onToggleLock={handleToggleLock} 
-                    />
-                    <GuidanceModeSelector
-                        guidanceMode={guidanceMode}
-                        onGuidanceModeChange={handleGuidanceModeChange}
-                    />
-                </div>
+                {/* Unified Mode & Guidance Settings Pill */}
+                <UnifiedModeSelector 
+                    mode={mode} 
+                    onModeChange={handleModeChange} 
+                    isLocked={isLocked} 
+                    onToggleLock={handleToggleLock} 
+                    guidanceMode={guidanceMode}
+                    onGuidanceModeChange={handleGuidanceModeChange}
+                />
 
                 <div className="flex items-center space-x-2">
                     {/* Headphones Advisory (subtle pill) */}
@@ -646,11 +642,14 @@ const VoiceSessionPage = () => {
                         <span className="font-semibold text-white">{speechSpeed}x</span>
                     </button>
 
-                    {/* Transcript Peek Button */}
+                    {/* Panels Drawer Button */}
                     <button
-                        onClick={() => setTranscriptDrawerOpen(!transcriptDrawerOpen)}
+                        onClick={() => {
+                            setTranscriptDrawerOpen(true);
+                            setDrawerTab('transcript');
+                        }}
                         className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 text-xs font-medium transition-all shadow-xs cursor-pointer backdrop-blur-md"
-                        title="View conversation history"
+                        title="View conversation history & telemetry"
                     >
                         <History size={13} className="text-neutral-300" />
                         <span className="hidden md:inline">History</span>
@@ -670,41 +669,47 @@ const VoiceSessionPage = () => {
                         aiState={aiState} 
                         getVisualizerData={getVisualizerData} 
                         useCartesia={useCartesia} 
+                        guidanceMode={guidanceMode}
                     />
                 </div>
             </main>
 
             {/* Lower-Middle: Minimal Floating Subtitles / Live Captions */}
-            <div className="relative z-20 px-6 pb-32 flex flex-col items-center justify-end pointer-events-none select-none">
+            <div className="relative z-20 px-6 pb-28 flex flex-col items-center justify-end pointer-events-none select-none">
                 <div className="max-w-2xl w-full flex flex-col items-center text-center space-y-2">
                     {interimText ? (
                         <div className="animate-in fade-in zoom-in-95 duration-200">
-                            <span className="inline-block px-4 py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 text-base md:text-xl font-light text-sky-300 tracking-wide animate-pulse shadow-lg">
+                            <span 
+                                className="inline-block px-4 py-1.5 rounded-2xl border text-base md:text-xl font-light tracking-wide animate-pulse shadow-lg"
+                                style={{ 
+                                    backgroundColor: 'rgba(91, 141, 239, 0.15)', 
+                                    borderColor: 'rgba(91, 141, 239, 0.3)',
+                                    color: 'var(--mode-casual)' 
+                                }}
+                            >
                                 "{interimText}"
                             </span>
                         </div>
                     ) : latestAssistantText ? (
                         <div className="animate-in fade-in duration-300 max-w-xl">
-                            <p className="text-base md:text-lg font-light text-neutral-200/90 leading-relaxed tracking-normal drop-shadow-md line-clamp-3">
+                            <p className="text-base md:text-lg font-light text-neutral-200 leading-relaxed tracking-normal drop-shadow-md line-clamp-3">
                                 "{latestAssistantText}"
                             </p>
                         </div>
-                    ) : !isSessionActive ? (
-                        <div className="text-xs tracking-widest uppercase font-medium text-neutral-400/80 animate-in fade-in duration-500">
-                            Tap the microphone to begin session
-                        </div>
-                    ) : (
-                        <div className="flex items-center space-x-2 text-xs tracking-widest uppercase font-medium text-neutral-400/80">
-                            <span className="w-2 h-2 rounded-full bg-sky-400/80 animate-ping"></span>
-                            <span>Listening... speak anytime</span>
-                        </div>
-                    )}
+                    ) : null}
 
                     {/* Guidance Mode Disclaimer Badge — only shown when a guidance mode is active */}
                     {guidanceMode && guidanceMode !== 'none' && (
                         <div className="animate-in fade-in duration-300 mt-2">
-                            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-500/25 text-amber-400/80 text-[11px] font-medium backdrop-blur-md">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 flex-shrink-0"></span>
+                            <span 
+                                className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-[11px] font-medium"
+                                style={{ 
+                                    backgroundColor: 'rgba(212, 83, 107, 0.12)', 
+                                    borderColor: 'rgba(212, 83, 107, 0.3)', 
+                                    color: 'var(--mode-guidance)' 
+                                }}
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--mode-guidance)' }}></span>
                                 <span>General wellness info — not professional advice</span>
                             </span>
                         </div>
@@ -712,104 +717,63 @@ const VoiceSessionPage = () => {
                 </div>
             </div>
 
-            {/* Floating Glassmorphic Bottom Island / Control Bar */}
+            {/* Floating Single Bordered Mic & Session Control Component (Task 6) */}
             <footer className="absolute bottom-7 left-0 right-0 flex justify-center px-4 pointer-events-none z-30">
-                <div className="bg-neutral-900/85 backdrop-blur-2xl border border-white/10 rounded-[2.2rem] shadow-[0_16px_50px_rgba(0,0,0,0.7)] pointer-events-auto transition-all duration-500 ease-out flex flex-col overflow-hidden w-full max-w-lg">
-                    
-                    {/* Collapsible Details Panel */}
-                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${detailsOpen && isSessionActive ? 'max-h-[30rem] border-b border-white/10' : 'max-h-0'}`}>
-                        <div className="p-5 bg-black/40 flex flex-col justify-around items-center space-y-4">
-                            {/* Metrics Row */}
-                            <div className="flex w-full justify-around items-center">
-                                <div className="text-center">
-                                    <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Latency</div>
-                                    <div className="text-lg text-white font-light">{metrics.ttfb ? `${metrics.ttfb}s` : '---'}</div>
-                                </div>
-                                <div className="w-px h-10 bg-white/10"></div>
-                                <div className="text-center">
-                                    <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Intent</div>
-                                    <div className={`text-sm font-medium ${intentColor} capitalize`}>{metrics.intent ? metrics.intent.replace('_', ' ') : '---'}</div>
-                                </div>
-                                <div className="w-px h-10 bg-white/10"></div>
-                                <div className="text-center">
-                                    <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Mode</div>
-                                    <div className="text-sm font-medium text-white capitalize">{mode} {isLocked ? '(Locked)' : ''}</div>
-                                </div>
-                            </div>
-
-                            {/* Voice Engine Toggle */}
-                            <div className="w-full flex items-center justify-between bg-white/5 border border-white/10 p-1.5 rounded-full">
-                                <button 
-                                    onClick={() => setUseCartesia(false)}
-                                    className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${!useCartesia ? 'bg-white/15 text-white shadow-xs font-semibold' : 'text-neutral-400 hover:text-white'}`}
-                                >
-                                    Browser Voice (Free)
-                                </button>
-                                <button 
-                                    onClick={() => setUseCartesia(true)}
-                                    className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${useCartesia ? 'bg-white/15 text-white shadow-xs font-semibold' : 'text-neutral-400 hover:text-white'}`}
-                                >
-                                    Cartesia (Premium)
-                                </button>
-                            </div>
-
-                            {/* Speech Speed Selector */}
-                            <div className="w-full flex items-center justify-between px-1">
-                                <span className="text-xs text-neutral-400 font-medium">Speed:</span>
-                                <div className="flex items-center space-x-1.5 bg-white/5 border border-white/10 p-1 rounded-full">
-                                    {SPEED_OPTIONS.map((s) => (
-                                        <button
-                                            key={s}
-                                            onClick={() => handleSpeedChange(s)}
-                                            className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${speechSpeed === s ? 'bg-white/20 text-white font-semibold shadow-xs' : 'text-neutral-400 hover:text-white'}`}
-                                        >
-                                            {s}x
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Browser Voice Selector Dropdown */}
-                            {!useCartesia && availableVoices.length > 0 && (
-                                <div className="w-full flex flex-col space-y-1.5 px-1">
-                                    <div className="flex justify-between items-center text-[11px] text-neutral-400 font-medium">
-                                        <span className="uppercase tracking-wider">Browser Voice</span>
-                                        <span>{availableVoices.length} voices</span>
-                                    </div>
-                                    <select
-                                        value={selectedVoiceName}
-                                        onChange={(e) => handleVoiceChange(e.target.value)}
-                                        className="w-full bg-neutral-800/90 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-400 truncate"
-                                    >
-                                        {availableVoices.map((v) => (
-                                            <option key={v.name} value={v.name} className="bg-neutral-900 text-white">
-                                                {(v.name.includes('Natural') || v.name.includes('Neural')) ? '✨ ' : ''}{v.name} ({v.lang})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                        </div>
+                <div 
+                    className="border shadow-2xl pointer-events-auto transition-all duration-500 ease-out flex flex-col overflow-hidden w-full max-w-lg"
+                    style={{
+                        backgroundColor: 'var(--bg-surface)',
+                        borderColor: 'var(--border-subtle)',
+                        borderRadius: 'var(--radius-lg)'
+                    }}
+                >
+                    {/* Integrated Instruction Banner (Task 6) */}
+                    <div 
+                        className="py-2 px-4 text-center border-b flex items-center justify-center transition-colors"
+                        style={{ 
+                            backgroundColor: 'var(--bg-elevated)',
+                            borderColor: 'var(--border-subtle)'
+                        }}
+                    >
+                        {!isSessionActive ? (
+                            <span className="text-[11px] tracking-widest uppercase font-medium" style={{ color: 'var(--text-muted)' }}>
+                                Tap the microphone to begin session
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center space-x-2 text-[11px] tracking-wider uppercase font-medium" style={{ color: 'var(--text-secondary)' }}>
+                                <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: 'var(--mode-casual)' }}></span>
+                                <span>{aiState === 'listening' ? 'Listening... speak anytime' : aiState === 'thinking' ? 'Thinking...' : 'Speaking...'}</span>
+                            </span>
+                        )}
                     </div>
 
                     {/* Main Bar Controls */}
                     <div className="flex items-center justify-between p-2 pl-4">
                         
-                        {/* Status / Toggle Details */}
+                        {/* Status / Open Telemetry Slide-Out Drawer */}
                         <button 
-                            onClick={() => setDetailsOpen(!detailsOpen)}
-                            className="flex items-center space-x-2.5 hover:bg-white/10 px-3 py-2 rounded-full transition-colors"
-                            disabled={!isSessionActive}
-                            title="Toggle Telemetry & Voice Settings"
+                            onClick={() => {
+                                setTranscriptDrawerOpen(true);
+                                setDrawerTab('telemetry');
+                            }}
+                            className="flex items-center space-x-2.5 hover:bg-white/10 px-3 py-2 rounded-full transition-colors cursor-pointer"
+                            title="Open Telemetry & Voice Settings"
                         >
-                            <Settings2 size={16} className="text-neutral-400" />
+                            <Settings2 size={16} style={{ color: 'var(--text-secondary)' }} />
                             <div className="flex items-center space-x-1.5">
-                                <span className={`w-2 h-2 rounded-full ${
-                                    aiState === 'speaking' ? 'bg-emerald-400 animate-pulse' :
-                                    aiState === 'thinking' ? 'bg-amber-400 animate-ping' :
-                                    aiState === 'listening' ? 'bg-sky-400' : 'bg-neutral-500'
-                                }`}></span>
-                                <span className="text-xs font-medium text-neutral-300 capitalize">
+                                <span 
+                                    className={`w-2 h-2 rounded-full ${
+                                        aiState === 'speaking' ? 'animate-pulse' :
+                                        aiState === 'thinking' ? 'animate-ping' : ''
+                                    }`}
+                                    style={{
+                                        backgroundColor: 
+                                            aiState === 'speaking' ? 'var(--mode-playful)' :
+                                            aiState === 'thinking' ? 'var(--mode-focused)' :
+                                            aiState === 'listening' ? 'var(--mode-casual)' : 'var(--text-muted)'
+                                    }}
+                                />
+                                <span className="text-xs font-medium capitalize" style={{ color: 'var(--text-primary)' }}>
                                     {aiState === 'idle' ? 'Ready' : 
                                      aiState === 'listening' ? 'Listening' :
                                      aiState === 'thinking' ? 'Thinking' : 'Speaking'}
@@ -824,7 +788,11 @@ const VoiceSessionPage = () => {
                                 value={textInput}
                                 onChange={(e) => setTextInput(e.target.value)}
                                 placeholder="Type a message..."
-                                className="w-full bg-white/5 border border-white/10 rounded-full px-3.5 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-sky-400 transition-all"
+                                className="w-full border rounded-full px-3.5 py-1.5 text-xs text-white placeholder-[var(--text-muted)] focus:outline-none transition-all"
+                                style={{
+                                    backgroundColor: 'var(--bg-elevated)',
+                                    borderColor: 'var(--border-subtle)'
+                                }}
                                 disabled={!isSessionActive}
                             />
                         </form>
@@ -835,30 +803,31 @@ const VoiceSessionPage = () => {
                                 <div className="flex space-x-1 px-3 pointer-events-none">
                                     {aiState === 'listening' ? (
                                         <div className="flex items-center h-6 space-x-1">
-                                            <div className="w-1 h-2 bg-sky-400 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
-                                            <div className="w-1 h-4 bg-sky-400 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
-                                            <div className="w-1 h-2.5 bg-sky-400 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
+                                            <div className="w-1 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--mode-casual)', animationDelay: '0ms' }}></div>
+                                            <div className="w-1 h-4 rounded-full animate-pulse" style={{ backgroundColor: 'var(--mode-casual)', animationDelay: '150ms' }}></div>
+                                            <div className="w-1 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--mode-casual)', animationDelay: '300ms' }}></div>
                                         </div>
                                     ) : aiState === 'speaking' ? (
                                         <div className="flex items-center h-6 space-x-1">
-                                            <div className="w-1 h-3 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                                            <div className="w-1 h-5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '100ms'}}></div>
-                                            <div className="w-1 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '200ms'}}></div>
-                                            <div className="w-1 h-4 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                                            <div className="w-1 h-3 rounded-full animate-bounce" style={{ backgroundColor: 'var(--mode-playful)', animationDelay: '0ms' }}></div>
+                                            <div className="w-1 h-5 rounded-full animate-bounce" style={{ backgroundColor: 'var(--mode-playful)', animationDelay: '100ms' }}></div>
+                                            <div className="w-1 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: 'var(--mode-playful)', animationDelay: '200ms' }}></div>
+                                            <div className="w-1 h-4 rounded-full animate-bounce" style={{ backgroundColor: 'var(--mode-playful)', animationDelay: '300ms' }}></div>
                                         </div>
                                     ) : aiState === 'thinking' ? (
-                                        <Activity size={18} className="text-amber-400 animate-spin" />
+                                        <Activity size={18} className="animate-spin" style={{ color: 'var(--mode-focused)' }} />
                                     ) : null}
                                 </div>
                             )}
 
                             <button 
                                 onClick={isSessionActive ? handleStopSession : handleStartSession}
-                                className={`flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 ${
-                                    isSessionActive 
-                                        ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30' 
-                                        : 'bg-white text-neutral-900 shadow-[0_0_20px_rgba(255,255,255,0.25)] hover:scale-105'
-                                }`}
+                                className="flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 shadow-md cursor-pointer hover:scale-105 active:scale-95"
+                                style={{
+                                    backgroundColor: isSessionActive ? 'rgba(239, 68, 68, 0.2)' : 'var(--text-primary)',
+                                    color: isSessionActive ? 'var(--status-danger)' : 'var(--bg-base)',
+                                    border: isSessionActive ? '1px solid rgba(239, 68, 68, 0.4)' : 'none'
+                                }}
                                 title={isSessionActive ? "Stop voice session" : "Start voice session"}
                             >
                                 {isSessionActive ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
@@ -869,54 +838,200 @@ const VoiceSessionPage = () => {
                 </div>
             </footer>
 
-            {/* Slide-Over Conversation History Drawer */}
+            {/* Slide-Out Tabbed Drawer [Transcript | Telemetry] (Task 7) */}
             {transcriptDrawerOpen && (
                 <div 
                     className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
                     onClick={() => setTranscriptDrawerOpen(false)}
                 >
                     <div 
-                        className="w-full max-w-md bg-neutral-900/95 border-l border-white/10 h-full p-6 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 pointer-events-auto"
+                        className="w-full max-w-md border-l h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 pointer-events-auto"
+                        style={{
+                            backgroundColor: 'var(--bg-surface)',
+                            borderColor: 'var(--border-subtle)'
+                        }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                            <div className="flex items-center space-x-2">
-                                <History size={16} className="text-neutral-400" />
-                                <h3 className="text-sm font-semibold text-white tracking-wide">Transcript History</h3>
+                        {/* Drawer Header & Tab Selector */}
+                        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-elevated)' }}>
+                            <div className="flex items-center space-x-1 p-1 rounded-lg" style={{ backgroundColor: 'var(--bg-base)' }}>
+                                <button
+                                    onClick={() => setDrawerTab('transcript')}
+                                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                                    style={{
+                                        backgroundColor: drawerTab === 'transcript' ? 'var(--bg-elevated)' : 'transparent',
+                                        color: drawerTab === 'transcript' ? 'var(--text-primary)' : 'var(--text-secondary)'
+                                    }}
+                                >
+                                    <History size={14} />
+                                    <span>Transcript</span>
+                                </button>
+                                <button
+                                    onClick={() => setDrawerTab('telemetry')}
+                                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                                    style={{
+                                        backgroundColor: drawerTab === 'telemetry' ? 'var(--bg-elevated)' : 'transparent',
+                                        color: drawerTab === 'telemetry' ? 'var(--text-primary)' : 'var(--text-secondary)'
+                                    }}
+                                >
+                                    <Sliders size={14} />
+                                    <span>Telemetry</span>
+                                </button>
                             </div>
                             <button 
                                 onClick={() => setTranscriptDrawerOpen(false)}
-                                className="p-1.5 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                                className="p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
+                                style={{ color: 'var(--text-muted)' }}
+                                title="Close panel"
                             >
                                 <X size={16} />
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
-                            {logs.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-neutral-500 text-xs">
-                                    No messages in current session yet.
+                        {/* Drawer Body */}
+                        <div className="flex-1 overflow-y-auto p-5">
+                            {drawerTab === 'transcript' ? (
+                                <div className="space-y-4">
+                                    {logs.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-64 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                            No messages in current session yet.
+                                        </div>
+                                    ) : (
+                                        logs.map((log, i) => (
+                                            <div key={i} className={`flex flex-col ${log.role === 'user' ? 'items-end' : log.role === 'system' ? 'items-center' : 'items-start'}`}>
+                                                {log.role === 'system' ? (
+                                                    <div className="px-3 py-1 rounded-full border text-[11px] tracking-wider uppercase font-medium" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                                                        {log.text}
+                                                    </div>
+                                                ) : (
+                                                    <div 
+                                                        className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-xs font-light leading-relaxed ${
+                                                            log.role === 'user' 
+                                                                ? 'rounded-br-none' 
+                                                                : 'rounded-bl-none'
+                                                        }`}
+                                                        style={{
+                                                            backgroundColor: log.role === 'user' ? 'var(--bg-elevated)' : 'rgba(91, 141, 239, 0.15)',
+                                                            color: log.role === 'user' ? 'var(--text-primary)' : 'var(--mode-casual)',
+                                                            border: log.role === 'user' ? '1px solid var(--border-subtle)' : '1px solid rgba(91, 141, 239, 0.25)'
+                                                        }}
+                                                    >
+                                                        {log.text}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                    <div ref={logsEndRef} />
                                 </div>
                             ) : (
-                                logs.map((log, i) => (
-                                    <div key={i} className={`flex flex-col ${log.role === 'user' ? 'items-end' : log.role === 'system' ? 'items-center' : 'items-start'}`}>
-                                        {log.role === 'system' ? (
-                                            <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-neutral-400 text-[11px] tracking-wider uppercase font-medium">
-                                                {log.text}
+                                /* Telemetry & Audio Settings Tab */
+                                <div className="space-y-6">
+                                    {/* Metrics Grid */}
+                                    <div className="p-4 rounded-xl border space-y-3" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+                                        <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Live Telemetry</div>
+                                        <div className="grid grid-cols-3 gap-2 text-center pt-2">
+                                            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-base)' }}>
+                                                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Latency</div>
+                                                <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                                    {metrics.ttfb ? `${metrics.ttfb}s` : '---'}
+                                                </div>
                                             </div>
-                                        ) : (
-                                            <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-xs font-light leading-relaxed ${
-                                                log.role === 'user' 
-                                                    ? 'bg-white/10 text-neutral-200 rounded-br-none' 
-                                                    : 'bg-sky-950/40 border border-sky-500/20 text-sky-100 rounded-bl-none'
-                                            }`}>
-                                                {log.text}
+                                            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-base)' }}>
+                                                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Intent</div>
+                                                <div className={`text-xs font-semibold capitalize pt-0.5 ${intentColor}`}>
+                                                    {metrics.intent ? metrics.intent.replace('_', ' ') : '---'}
+                                                </div>
                                             </div>
-                                        )}
+                                            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-base)' }}>
+                                                <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Tone Mode</div>
+                                                <div className="text-xs font-semibold capitalize pt-0.5" style={{ color: 'var(--text-primary)' }}>
+                                                    {mode} {isLocked ? '🔒' : ''}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                ))
+
+                                    {/* Voice Engine Toggle */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Voice Synthesis Engine</label>
+                                        <div className="flex items-center p-1 rounded-xl border" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+                                            <button 
+                                                onClick={() => setUseCartesia(false)}
+                                                className="flex-1 text-xs font-medium py-2 rounded-lg transition-colors cursor-pointer"
+                                                style={{
+                                                    backgroundColor: !useCartesia ? 'var(--bg-surface)' : 'transparent',
+                                                    color: !useCartesia ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                                    boxShadow: !useCartesia ? '0 1px 3px rgba(0,0,0,0.3)' : 'none'
+                                                }}
+                                            >
+                                                Browser Voice (Free)
+                                            </button>
+                                            <button 
+                                                onClick={() => setUseCartesia(true)}
+                                                className="flex-1 text-xs font-medium py-2 rounded-lg transition-colors cursor-pointer"
+                                                style={{
+                                                    backgroundColor: useCartesia ? 'var(--bg-surface)' : 'transparent',
+                                                    color: useCartesia ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                                    boxShadow: useCartesia ? '0 1px 3px rgba(0,0,0,0.3)' : 'none'
+                                                }}
+                                            >
+                                                Cartesia (Premium)
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Speech Speed Selector */}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Speech Speed</span>
+                                            <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{speechSpeed}x</span>
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {SPEED_OPTIONS.map((s) => (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => handleSpeedChange(s)}
+                                                    className="text-xs py-2 rounded-lg font-medium transition-all border cursor-pointer"
+                                                    style={{
+                                                        backgroundColor: speechSpeed === s ? 'var(--bg-elevated)' : 'transparent',
+                                                        borderColor: speechSpeed === s ? 'var(--mode-casual)' : 'var(--border-subtle)',
+                                                        color: speechSpeed === s ? 'var(--text-primary)' : 'var(--text-secondary)'
+                                                    }}
+                                                >
+                                                    {s}x
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Browser Voice Selector Dropdown */}
+                                    {!useCartesia && availableVoices.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="font-medium uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Browser Voice</span>
+                                                <span style={{ color: 'var(--text-muted)' }}>{availableVoices.length} voices</span>
+                                            </div>
+                                            <select
+                                                value={selectedVoiceName}
+                                                onChange={(e) => handleVoiceChange(e.target.value)}
+                                                className="w-full border rounded-xl px-3 py-2 text-xs focus:outline-none transition-all truncate"
+                                                style={{
+                                                    backgroundColor: 'var(--bg-elevated)',
+                                                    borderColor: 'var(--border-subtle)',
+                                                    color: 'var(--text-primary)'
+                                                }}
+                                            >
+                                                {availableVoices.map((v) => (
+                                                    <option key={v.name} value={v.name} style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+                                                        {(v.name.includes('Natural') || v.name.includes('Neural')) ? '✨ ' : ''}{v.name} ({v.lang})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
                             )}
-                            <div ref={logsEndRef} />
                         </div>
                     </div>
                 </div>

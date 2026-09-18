@@ -1,32 +1,46 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-const MODE_PALETTES = {
+const getTokenColor = (tokenName, fallback) => {
+    if (typeof window !== 'undefined') {
+        const val = getComputedStyle(document.documentElement).getPropertyValue(tokenName).trim();
+        if (val) return val;
+    }
+    return fallback;
+};
+
+const getModePalettes = () => ({
     casual: {
-        primary: new THREE.Color('#38bdf8'),    // Sky blue
-        secondary: new THREE.Color('#0284c7'),  // Ocean blue
-        halo: new THREE.Color('#7dd3fc'),       // Light cyan
-        core: new THREE.Color('#bae6fd'),       // Soft luminous glow
+        primary: new THREE.Color(getTokenColor('--mode-casual', '#5B8DEF')),
+        secondary: new THREE.Color(getTokenColor('--mode-casual', '#5B8DEF')).multiplyScalar(0.7),
+        halo: new THREE.Color(getTokenColor('--mode-casual', '#5B8DEF')).lerp(new THREE.Color('#ffffff'), 0.3),
+        core: new THREE.Color(getTokenColor('--mode-casual', '#5B8DEF')).lerp(new THREE.Color('#ffffff'), 0.6),
     },
     focused: {
-        primary: new THREE.Color('#f59e0b'),    // Amber gold
-        secondary: new THREE.Color('#d97706'),  // Deep warm amber
-        halo: new THREE.Color('#fcd34d'),       // Sunlight
-        core: new THREE.Color('#fef3c7'),       // Luminous warm white
+        primary: new THREE.Color(getTokenColor('--mode-focused', '#E0913D')),
+        secondary: new THREE.Color(getTokenColor('--mode-focused', '#E0913D')).multiplyScalar(0.7),
+        halo: new THREE.Color(getTokenColor('--mode-focused', '#E0913D')).lerp(new THREE.Color('#ffffff'), 0.3),
+        core: new THREE.Color(getTokenColor('--mode-focused', '#E0913D')).lerp(new THREE.Color('#ffffff'), 0.6),
     },
     reflective: {
-        primary: new THREE.Color('#a855f7'),    // Lavender violet
-        secondary: new THREE.Color('#ec4899'),  // Gentle rose
-        halo: new THREE.Color('#c084fc'),       // Lilac
-        core: new THREE.Color('#f3e8ff'),       // Pale lavender
+        primary: new THREE.Color(getTokenColor('--mode-reflective', '#8B6FE0')),
+        secondary: new THREE.Color(getTokenColor('--mode-reflective', '#8B6FE0')).multiplyScalar(0.7),
+        halo: new THREE.Color(getTokenColor('--mode-reflective', '#8B6FE0')).lerp(new THREE.Color('#ffffff'), 0.3),
+        core: new THREE.Color(getTokenColor('--mode-reflective', '#8B6FE0')).lerp(new THREE.Color('#ffffff'), 0.6),
     },
     playful: {
-        primary: new THREE.Color('#10b981'),    // Emerald mint
-        secondary: new THREE.Color('#06b6d4'),  // Vibrant teal
-        halo: new THREE.Color('#34d399'),       // Bright lime mint
-        core: new THREE.Color('#a7f3d0'),       // Sparkling aquamarine
+        primary: new THREE.Color(getTokenColor('--mode-playful', '#4FC98A')),
+        secondary: new THREE.Color(getTokenColor('--mode-playful', '#4FC98A')).multiplyScalar(0.7),
+        halo: new THREE.Color(getTokenColor('--mode-playful', '#4FC98A')).lerp(new THREE.Color('#ffffff'), 0.3),
+        core: new THREE.Color(getTokenColor('--mode-playful', '#4FC98A')).lerp(new THREE.Color('#ffffff'), 0.6),
     },
-};
+    idle: {
+        primary: new THREE.Color(getTokenColor('--text-secondary', '#9a9aa8')),
+        secondary: new THREE.Color(getTokenColor('--text-muted', '#5c5c68')),
+        halo: new THREE.Color(getTokenColor('--text-secondary', '#9a9aa8')).multiplyScalar(0.8),
+        core: new THREE.Color(getTokenColor('--text-secondary', '#9a9aa8')).lerp(new THREE.Color('#ffffff'), 0.2),
+    }
+});
 
 // Generates an anti-aliased soft circular glow sprite texture
 function createParticleTexture() {
@@ -51,12 +65,14 @@ export const ParticleSphere = ({
     mode = 'casual', 
     aiState = 'idle', 
     getVisualizerData, 
-    useCartesia = false 
+    useCartesia = false,
+    guidanceMode = 'none'
 }) => {
     const containerRef = useRef(null);
     const modeRef = useRef(mode);
     const aiStateRef = useRef(aiState);
     const useCartesiaRef = useRef(useCartesia);
+    const guidanceModeRef = useRef(guidanceMode);
 
     useEffect(() => {
         modeRef.current = mode;
@@ -69,6 +85,10 @@ export const ParticleSphere = ({
     useEffect(() => {
         useCartesiaRef.current = useCartesia;
     }, [useCartesia]);
+
+    useEffect(() => {
+        guidanceModeRef.current = guidanceMode;
+    }, [guidanceMode]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -104,7 +124,7 @@ export const ParticleSphere = ({
         const sphereNormals = new Float32Array(SPHERE_COUNT * 3);
         const sphereColors = new Float32Array(SPHERE_COUNT * 3);
 
-        const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle ~2.3999
+        const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle
         const SPHERE_RADIUS = 1.28;
 
         for (let i = 0; i < SPHERE_COUNT; i++) {
@@ -132,10 +152,9 @@ export const ParticleSphere = ({
             spherePositions[i * 3 + 1] = by;
             spherePositions[i * 3 + 2] = bz;
 
-            // Initialize default casual color
-            sphereColors[i * 3] = 0.22;
-            sphereColors[i * 3 + 1] = 0.74;
-            sphereColors[i * 3 + 2] = 0.97;
+            sphereColors[i * 3] = 0.36;
+            sphereColors[i * 3 + 1] = 0.55;
+            sphereColors[i * 3 + 2] = 0.94;
         }
 
         sphereGeo.setAttribute('position', new THREE.BufferAttribute(spherePositions, 3));
@@ -165,7 +184,7 @@ export const ParticleSphere = ({
 
         for (let i = 0; i < HALO_COUNT; i++) {
             const angle = (i / HALO_COUNT) * Math.PI * 2;
-            const r = 1.85 + (Math.sin(i * 11) * 0.5 + 0.5) * 0.45; // proportional halo ring
+            const r = 1.85 + (Math.sin(i * 11) * 0.5 + 0.5) * 0.45;
             const hx = Math.cos(angle) * r;
             const hz = Math.sin(angle) * r;
             const hy = Math.sin(angle * 3) * 0.12 + (Math.sin(i * 13) * 0.06);
@@ -198,15 +217,68 @@ export const ParticleSphere = ({
 
         const haloPoints = new THREE.Points(haloGeo, haloMaterial);
         const haloGroup = new THREE.Group();
-        haloGroup.rotation.x = 0.48; // Tilt halo relative to sphere
+        haloGroup.rotation.x = 0.48;
         haloGroup.rotation.z = 0.18;
         haloGroup.add(haloPoints);
         scene.add(haloGroup);
 
-        // 4. Central Luminous Core Glow Sprite
+        // 4. Build Guidance Mode Outer Ring (~180 particles in var(--mode-guidance))
+        // Layered on top, rendered when a guidance mode other than 'None' is active
+        const GUIDANCE_COUNT = 180;
+        const guidanceGeo = new THREE.BufferGeometry();
+        const guidancePositions = new Float32Array(GUIDANCE_COUNT * 3);
+        const guidanceBasePositions = new Float32Array(GUIDANCE_COUNT * 3);
+        const guidanceColors = new Float32Array(GUIDANCE_COUNT * 3);
+
+        const guidanceColor = new THREE.Color(getTokenColor('--mode-guidance', '#D4536B'));
+
+        for (let i = 0; i < GUIDANCE_COUNT; i++) {
+            const angle = (i / GUIDANCE_COUNT) * Math.PI * 2;
+            const gr = 2.40 + (Math.sin(i * 9) * 0.5 + 0.5) * 0.20;
+            const gx = Math.cos(angle) * gr;
+            const gz = Math.sin(angle) * gr;
+            const gy = Math.sin(angle * 5) * 0.09;
+
+            guidanceBasePositions[i * 3] = gx;
+            guidanceBasePositions[i * 3 + 1] = gy;
+            guidanceBasePositions[i * 3 + 2] = gz;
+
+            guidancePositions[i * 3] = gx;
+            guidancePositions[i * 3 + 1] = gy;
+            guidancePositions[i * 3 + 2] = gz;
+
+            guidanceColors[i * 3] = guidanceColor.r;
+            guidanceColors[i * 3 + 1] = guidanceColor.g;
+            guidanceColors[i * 3 + 2] = guidanceColor.b;
+        }
+
+        guidanceGeo.setAttribute('position', new THREE.BufferAttribute(guidancePositions, 3));
+        guidanceGeo.setAttribute('color', new THREE.BufferAttribute(guidanceColors, 3));
+
+        const guidanceMaterial = new THREE.PointsMaterial({
+            size: 0.040,
+            map: particleTexture,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.80,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+
+        const guidancePoints = new THREE.Points(guidanceGeo, guidanceMaterial);
+        const guidanceGroup = new THREE.Group();
+        guidanceGroup.rotation.x = -0.38;
+        guidanceGroup.rotation.z = -0.22;
+        guidanceGroup.add(guidancePoints);
+        scene.add(guidanceGroup);
+
+        // 5. Central Luminous Core Glow Sprite
+        const initialPalettes = getModePalettes();
+        const initialCasual = initialPalettes.casual;
+
         const coreMaterial = new THREE.SpriteMaterial({
             map: particleTexture,
-            color: new THREE.Color('#38bdf8'),
+            color: initialCasual.primary.clone(),
             transparent: true,
             opacity: 0.30,
             blending: THREE.AdditiveBlending,
@@ -216,10 +288,10 @@ export const ParticleSphere = ({
         scene.add(coreSprite);
 
         // Dynamic State Tracking
-        const currentPrimaryColor = new THREE.Color('#38bdf8');
-        const currentSecondaryColor = new THREE.Color('#0284c7');
-        const currentHaloColor = new THREE.Color('#7dd3fc');
-        const currentCoreColor = new THREE.Color('#bae6fd');
+        const currentPrimaryColor = initialCasual.primary.clone();
+        const currentSecondaryColor = initialCasual.secondary.clone();
+        const currentHaloColor = initialCasual.halo.clone();
+        const currentCoreColor = initialCasual.core.clone();
 
         let mouseX = 0;
         let mouseY = 0;
@@ -247,7 +319,7 @@ export const ParticleSphere = ({
         const resizeObserver = new ResizeObserver(handleResize);
         resizeObserver.observe(container);
 
-        // 5. 60 FPS Render & Physics Loop
+        // 6. 60 FPS Render & Physics Loop
         const animate = () => {
             animationFrameId = requestAnimationFrame(animate);
 
@@ -261,11 +333,21 @@ export const ParticleSphere = ({
             // Fetch live audio visualizer data
             const activeMode = modeRef.current || 'casual';
             const currentState = aiStateRef.current || 'idle';
-            const audioData = getVisualizerData ? getVisualizerData(currentState, useCartesiaRef.current) : { volume: 0, bass: 0, mid: 0, treble: 0, source: 'idle' };
+            const isIdle = currentState === 'idle';
+            const currentGuidance = guidanceModeRef.current || 'none';
+            const hasGuidanceActive = currentGuidance !== 'none';
 
-            const targetPalette = MODE_PALETTES[activeMode] || MODE_PALETTES.casual;
+            const audioData = getVisualizerData 
+                ? getVisualizerData(currentState, useCartesiaRef.current) 
+                : { volume: 0, bass: 0, mid: 0, treble: 0, source: 'idle' };
 
-            // Smoothly lerp colors toward the current conversation mode
+            const currentPalettes = getModePalettes();
+            // In idle state: desaturated neutral color, slow drift, no audio reactivity
+            const targetPalette = isIdle 
+                ? currentPalettes.idle 
+                : (currentPalettes[activeMode] || currentPalettes.casual);
+
+            // Smoothly lerp colors toward the current state / mode
             currentPrimaryColor.lerp(targetPalette.primary, 0.06);
             currentSecondaryColor.lerp(targetPalette.secondary, 0.06);
             currentHaloColor.lerp(targetPalette.halo, 0.06);
@@ -273,24 +355,25 @@ export const ParticleSphere = ({
 
             coreMaterial.color.copy(currentCoreColor);
 
-            const vol = audioData.volume || 0;
-            const bass = audioData.bass || 0;
-            const mid = audioData.mid || 0;
-            const treble = audioData.treble || 0;
-            const source = audioData.source || 'idle';
+            // Audio features (zeroed out in idle)
+            const vol = isIdle ? 0 : (audioData.volume || 0);
+            const bass = isIdle ? 0 : (audioData.bass || 0);
+            const mid = isIdle ? 0 : (audioData.mid || 0);
+            const treble = isIdle ? 0 : (audioData.treble || 0);
+            const source = isIdle ? 'idle' : (audioData.source || 'idle');
 
-            // Core glow scale breathing & pulsing
-            const baseGlowScale = 2.1 + Math.sin(elapsed * 1.3) * 0.06;
+            // Core glow breathing
+            const baseGlowScale = 2.1 + Math.sin(elapsed * 1.1) * 0.05;
             const audioGlowPulse = vol * 0.25;
             coreSprite.scale.set(baseGlowScale + audioGlowPulse, baseGlowScale + audioGlowPulse, 1.0);
-            coreMaterial.opacity = 0.22 + vol * 0.18;
+            coreMaterial.opacity = isIdle ? 0.16 : (0.22 + vol * 0.18);
 
-            // --- Sphere Particle Physics & Real-Time Audio Displacement ---
+            // --- Sphere Particle Physics & Audio Reactivity ---
             const posAttr = sphereGeo.attributes.position;
             const colAttr = sphereGeo.attributes.color;
 
             // Subtle resting breath oscillation
-            const restingBreath = Math.sin(elapsed * 1.3) * 0.012;
+            const restingBreath = Math.sin(elapsed * (isIdle ? 0.8 : 1.3)) * (isIdle ? 0.008 : 0.012);
 
             for (let i = 0; i < SPHERE_COUNT; i++) {
                 const i3 = i * 3;
@@ -305,7 +388,7 @@ export const ParticleSphere = ({
                 let displacement = restingBreath;
 
                 if (source === 'user') {
-                    // USER SPEAKING: Subtle acoustic ripple on voice
+                    // USER SPEAKING: Amplitude and frequency ripple from mic AnalyserNode
                     const absY = Math.abs(ny);
                     let freqWeight = 0;
                     if (absY < 0.4) {
@@ -316,29 +399,27 @@ export const ParticleSphere = ({
                         freqWeight = treble * 0.35 + mid * 0.15;
                     }
 
-                    // Gentle wave ripple across microphone voice
                     const microWave = Math.sin(nx * 4.0 + ny * 5.0 + elapsed * 5.0) * 0.012 * vol;
                     displacement += freqWeight * 0.10 + microWave;
 
                 } else if (source === 'ai') {
-                    // AI SPEAKING: Coherent, gentle harmonic traveling ripples
+                    // AI SPEAKING: Harmonic traveling ripples from TTS output AnalyserNode
                     const ripple1 = Math.sin(nx * 3.5 + ny * 2.5 + elapsed * 4.5);
                     const ripple2 = Math.cos(nz * 3.5 + elapsed * 3.5);
                     const liquidWave = (ripple1 * 0.6 + ripple2 * 0.4) * (0.018 + vol * 0.035);
                     displacement += liquidWave;
 
                 } else if (source === 'thinking') {
-                    // THINKING: Rhythmic breathing pulse
+                    // THINKING: Cognitive rhythmic pulse
                     const thinkPulse = Math.sin(elapsed * 3.0 + ny * 3.5) * 0.035;
                     displacement += thinkPulse;
                 }
 
-                // Apply displacement along vertex normal
                 posAttr.array[i3] = bx + nx * displacement;
                 posAttr.array[i3 + 1] = by + ny * displacement;
                 posAttr.array[i3 + 2] = bz + nz * displacement;
 
-                // Color gradient from pole to equator using mode palette
+                // Color gradient from pole to equator
                 const equatorFactor = 1 - Math.abs(ny);
                 colAttr.array[i3] = THREE.MathUtils.lerp(currentSecondaryColor.r, currentPrimaryColor.r, equatorFactor);
                 colAttr.array[i3 + 1] = THREE.MathUtils.lerp(currentSecondaryColor.g, currentPrimaryColor.g, equatorFactor);
@@ -348,12 +429,13 @@ export const ParticleSphere = ({
             posAttr.needsUpdate = true;
             colAttr.needsUpdate = true;
 
-            // --- Orbiting Halo Dynamics ---
+            // --- Orbiting Halo Ring Dynamics ---
             const haloPosAttr = haloGeo.attributes.position;
             const haloColAttr = haloGeo.attributes.color;
 
-            // Halo spin speed accelerates gently with audio volume
-            const haloSpinRate = (0.0035 + vol * 0.005) * (source === 'ai' ? 1.3 : 1.0);
+            const haloSpinRate = isIdle 
+                ? 0.0020 
+                : ((0.0035 + vol * 0.005) * (source === 'ai' ? 1.3 : 1.0));
             haloGroup.rotation.y -= haloSpinRate;
 
             for (let i = 0; i < HALO_COUNT; i++) {
@@ -362,7 +444,6 @@ export const ParticleSphere = ({
                 const hby = haloBasePositions[i3 + 1];
                 const hbz = haloBasePositions[i3 + 2];
 
-                // Subtle halo shimmer
                 const haloWave = Math.sin(i * 0.15 + elapsed * 2.5) * (0.015 + vol * 0.025);
                 const expansion = 1.0 + restingBreath * 0.3 + vol * 0.035;
 
@@ -378,17 +459,46 @@ export const ParticleSphere = ({
             haloPosAttr.needsUpdate = true;
             haloColAttr.needsUpdate = true;
 
+            // --- Guidance Mode Outer Ring Dynamics ---
+            if (hasGuidanceActive) {
+                guidanceGroup.visible = true;
+                guidanceGroup.rotation.y += 0.0025;
+                const gCol = new THREE.Color(getTokenColor('--mode-guidance', '#D4536B'));
+                const gColAttr = guidanceGeo.attributes.color;
+                const gPosAttr = guidanceGeo.attributes.position;
+
+                for (let i = 0; i < GUIDANCE_COUNT; i++) {
+                    const i3 = i * 3;
+                    const gbx = guidanceBasePositions[i3];
+                    const gby = guidanceBasePositions[i3 + 1];
+                    const gbz = guidanceBasePositions[i3 + 2];
+
+                    const gWave = Math.sin(i * 0.2 + elapsed * 2.0) * 0.018;
+                    gPosAttr.array[i3] = gbx;
+                    gPosAttr.array[i3 + 1] = gby + gWave;
+                    gPosAttr.array[i3 + 2] = gbz;
+
+                    gColAttr.array[i3] = gCol.r;
+                    gColAttr.array[i3 + 1] = gCol.g;
+                    gColAttr.array[i3 + 2] = gCol.b;
+                }
+                gPosAttr.needsUpdate = true;
+                gColAttr.needsUpdate = true;
+            } else {
+                guidanceGroup.visible = false;
+            }
+
             // Sphere group rotation & interactive mouse tilt
-            sphereGroup.rotation.y += 0.0035 + (source === 'ai' ? 0.005 : 0.001);
-            sphereGroup.rotation.x = Math.sin(elapsed * 0.4) * 0.08 + mouseY * 0.25;
-            sphereGroup.rotation.z = mouseX * 0.25;
+            sphereGroup.rotation.y += isIdle ? 0.002 : (0.0035 + (source === 'ai' ? 0.005 : 0.001));
+            sphereGroup.rotation.x = Math.sin(elapsed * 0.4) * 0.06 + mouseY * 0.20;
+            sphereGroup.rotation.z = mouseX * 0.20;
 
             renderer.render(scene, camera);
         };
 
         animate();
 
-        // 6. Memory Cleanup on Unmount
+        // 7. Memory Cleanup on Unmount
         return () => {
             cancelAnimationFrame(animationFrameId);
             window.removeEventListener('pointermove', handlePointerMove);
@@ -399,6 +509,8 @@ export const ParticleSphere = ({
             sphereMaterial.dispose();
             haloGeo.dispose();
             haloMaterial.dispose();
+            guidanceGeo.dispose();
+            guidanceMaterial.dispose();
             coreMaterial.dispose();
             particleTexture.dispose();
             renderer.dispose();
