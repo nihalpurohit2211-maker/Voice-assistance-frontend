@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { audioPlayer } from './audioPlayer';
 
 /**
@@ -159,18 +159,18 @@ export const useAudioAnalyzer = (isSessionActive) => {
             }
 
             const rawVolume = (sum / len) / 255;
-            // Noise floor gate
-            const volume = rawVolume > 0.03 ? rawVolume * 1.5 : 0;
+            // Smooth noise floor gate: ignore ambient mic noise < 0.035
+            const volume = rawVolume > 0.035 ? Math.min((rawVolume - 0.035) * 1.2, 1.0) : 0;
             const bass = (bassSum / 16) / 255;
             const mid = (midSum / 48) / 255;
             const treble = (trebleSum / 64) / 255;
 
             return {
-                source: volume > 0.03 ? 'user' : 'idle',
-                volume: Math.min(volume, 1.0),
-                bass: Math.min(bass * 1.4, 1.0),
-                mid: Math.min(mid * 1.5, 1.0),
-                treble: Math.min(treble * 1.3, 1.0),
+                source: volume > 0.015 ? 'user' : 'idle',
+                volume,
+                bass,
+                mid,
+                treble,
                 rawData: dataArray
             };
         }

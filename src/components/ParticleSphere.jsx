@@ -105,7 +105,7 @@ export const ParticleSphere = ({
         const sphereColors = new Float32Array(SPHERE_COUNT * 3);
 
         const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle ~2.3999
-        const SPHERE_RADIUS = 1.85;
+        const SPHERE_RADIUS = 0.95;
 
         for (let i = 0; i < SPHERE_COUNT; i++) {
             const y = 1 - (i / (SPHERE_COUNT - 1)) * 2; // -1 to 1
@@ -142,7 +142,7 @@ export const ParticleSphere = ({
         sphereGeo.setAttribute('color', new THREE.BufferAttribute(sphereColors, 3));
 
         const sphereMaterial = new THREE.PointsMaterial({
-            size: 0.08,
+            size: 0.052,
             map: particleTexture,
             vertexColors: true,
             transparent: true,
@@ -165,10 +165,10 @@ export const ParticleSphere = ({
 
         for (let i = 0; i < HALO_COUNT; i++) {
             const angle = (i / HALO_COUNT) * Math.PI * 2;
-            const r = 2.6 + (Math.sin(i * 11) * 0.5 + 0.5) * 0.7; // slight organic ribbon thickness
+            const r = 1.4 + (Math.sin(i * 11) * 0.5 + 0.5) * 0.35; // proportional halo ring
             const hx = Math.cos(angle) * r;
             const hz = Math.sin(angle) * r;
-            const hy = Math.sin(angle * 3) * 0.18 + (Math.sin(i * 13) * 0.08);
+            const hy = Math.sin(angle * 3) * 0.10 + (Math.sin(i * 13) * 0.05);
 
             haloBasePositions[i * 3] = hx;
             haloBasePositions[i * 3 + 1] = hy;
@@ -187,7 +187,7 @@ export const ParticleSphere = ({
         haloGeo.setAttribute('color', new THREE.BufferAttribute(haloColors, 3));
 
         const haloMaterial = new THREE.PointsMaterial({
-            size: 0.065,
+            size: 0.042,
             map: particleTexture,
             vertexColors: true,
             transparent: true,
@@ -208,11 +208,11 @@ export const ParticleSphere = ({
             map: particleTexture,
             color: new THREE.Color('#38bdf8'),
             transparent: true,
-            opacity: 0.35,
+            opacity: 0.30,
             blending: THREE.AdditiveBlending,
         });
         const coreSprite = new THREE.Sprite(coreMaterial);
-        coreSprite.scale.set(3.2, 3.2, 1.0);
+        coreSprite.scale.set(1.65, 1.65, 1.0);
         scene.add(coreSprite);
 
         // Dynamic State Tracking
@@ -280,17 +280,17 @@ export const ParticleSphere = ({
             const source = audioData.source || 'idle';
 
             // Core glow scale breathing & pulsing
-            const baseGlowScale = 3.2 + Math.sin(elapsed * 1.5) * 0.15;
-            const audioGlowPulse = vol * 1.8;
+            const baseGlowScale = 1.65 + Math.sin(elapsed * 1.3) * 0.05;
+            const audioGlowPulse = vol * 0.25;
             coreSprite.scale.set(baseGlowScale + audioGlowPulse, baseGlowScale + audioGlowPulse, 1.0);
-            coreMaterial.opacity = 0.28 + vol * 0.45;
+            coreMaterial.opacity = 0.22 + vol * 0.18;
 
             // --- Sphere Particle Physics & Real-Time Audio Displacement ---
             const posAttr = sphereGeo.attributes.position;
             const colAttr = sphereGeo.attributes.color;
 
-            // Natural resting breath oscillation
-            const restingBreath = Math.sin(elapsed * 1.6) * 0.04;
+            // Subtle resting breath oscillation
+            const restingBreath = Math.sin(elapsed * 1.3) * 0.012;
 
             for (let i = 0; i < SPHERE_COUNT; i++) {
                 const i3 = i * 3;
@@ -305,32 +305,31 @@ export const ParticleSphere = ({
                 let displacement = restingBreath;
 
                 if (source === 'user') {
-                    // USER SPEAKING: Direct real-time frequency displacement based on actual voice
-                    // Bass influences equator (|ny| < 0.4), Mids influence body (0.4-0.8), Treble influences poles (>0.8)
+                    // USER SPEAKING: Subtle acoustic ripple on voice
                     const absY = Math.abs(ny);
                     let freqWeight = 0;
                     if (absY < 0.4) {
-                        freqWeight = bass * 1.3 + mid * 0.5;
+                        freqWeight = bass * 0.35 + mid * 0.2;
                     } else if (absY < 0.8) {
-                        freqWeight = mid * 1.2 + bass * 0.3;
+                        freqWeight = mid * 0.35 + bass * 0.15;
                     } else {
-                        freqWeight = treble * 1.4 + mid * 0.4;
+                        freqWeight = treble * 0.35 + mid * 0.15;
                     }
 
-                    // Dynamic wave ripple across microphone voice pitch
-                    const microWave = Math.sin(nx * 5.0 + ny * 6.0 + elapsed * 8.0) * 0.08 * vol;
-                    displacement += freqWeight * 0.75 + microWave;
+                    // Gentle wave ripple across microphone voice
+                    const microWave = Math.sin(nx * 4.0 + ny * 5.0 + elapsed * 5.0) * 0.012 * vol;
+                    displacement += freqWeight * 0.10 + microWave;
 
                 } else if (source === 'ai') {
-                    // AI SPEAKING: Coherent, smooth harmonic traveling ripples
-                    const ripple1 = Math.sin(nx * 4.0 + ny * 3.0 + elapsed * 6.0);
-                    const ripple2 = Math.cos(nz * 4.0 + elapsed * 4.5);
-                    const liquidWave = (ripple1 * 0.6 + ripple2 * 0.4) * (0.12 + vol * 0.55);
+                    // AI SPEAKING: Coherent, gentle harmonic traveling ripples
+                    const ripple1 = Math.sin(nx * 3.5 + ny * 2.5 + elapsed * 4.5);
+                    const ripple2 = Math.cos(nz * 3.5 + elapsed * 3.5);
+                    const liquidWave = (ripple1 * 0.6 + ripple2 * 0.4) * (0.018 + vol * 0.035);
                     displacement += liquidWave;
 
                 } else if (source === 'thinking') {
-                    // THINKING: Rhythmic breathing wave expanding from equator
-                    const thinkPulse = Math.sin(elapsed * 3.5 + ny * 4.0) * 0.12;
+                    // THINKING: Rhythmic breathing pulse
+                    const thinkPulse = Math.sin(elapsed * 3.0 + ny * 3.5) * 0.035;
                     displacement += thinkPulse;
                 }
 
@@ -353,8 +352,8 @@ export const ParticleSphere = ({
             const haloPosAttr = haloGeo.attributes.position;
             const haloColAttr = haloGeo.attributes.color;
 
-            // Halo spin speed accelerates with audio volume
-            const haloSpinRate = (0.005 + vol * 0.02) * (source === 'ai' ? 1.5 : 1.0);
+            // Halo spin speed accelerates gently with audio volume
+            const haloSpinRate = (0.0035 + vol * 0.005) * (source === 'ai' ? 1.3 : 1.0);
             haloGroup.rotation.y -= haloSpinRate;
 
             for (let i = 0; i < HALO_COUNT; i++) {
@@ -363,9 +362,9 @@ export const ParticleSphere = ({
                 const hby = haloBasePositions[i3 + 1];
                 const hbz = haloBasePositions[i3 + 2];
 
-                // Halo ripples with audio intensity
-                const haloWave = Math.sin(i * 0.15 + elapsed * 4.0) * (0.05 + vol * 0.25);
-                const expansion = 1.0 + restingBreath * 0.5 + vol * 0.22;
+                // Subtle halo shimmer
+                const haloWave = Math.sin(i * 0.15 + elapsed * 2.5) * (0.015 + vol * 0.025);
+                const expansion = 1.0 + restingBreath * 0.3 + vol * 0.035;
 
                 haloPosAttr.array[i3] = hbx * expansion;
                 haloPosAttr.array[i3 + 1] = hby + haloWave;

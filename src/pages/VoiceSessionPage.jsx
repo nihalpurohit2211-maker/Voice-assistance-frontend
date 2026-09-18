@@ -361,7 +361,7 @@ const VoiceSessionPage = () => {
         return false;
     };
 
-    const { start: startMic, stop: stopMic, isListening } = useSpeechRecognition({
+    const { start: startMic, stop: stopMic } = useSpeechRecognition({
         onSpeechStart: (text) => {
             // Suppress repeated barge-in triggers during the same utterance or speaking turn
             if (hasInterruptedCurrentTurnRef.current) {
