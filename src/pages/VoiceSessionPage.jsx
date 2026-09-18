@@ -601,7 +601,7 @@ const VoiceSessionPage = () => {
             />
 
             {/* Header: Minimal, floating, unobtrusive */}
-            <header className="relative z-30 px-6 py-5 flex justify-between items-center" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--bg-base) 90%, transparent), transparent)' }}>
+            <header className="relative z-40 px-6 py-5 flex justify-between items-center" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--bg-base) 90%, transparent), transparent)' }}>
                 <Link 
                     to="/chats" 
                     className="flex items-center space-x-2 text-neutral-400 hover:text-white transition-all text-xs font-medium tracking-wider uppercase px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md shadow-xs"
@@ -666,7 +666,7 @@ const VoiceSessionPage = () => {
                 <div className="w-full h-full max-w-5xl max-h-[82vh] relative flex items-center justify-center">
                     <ParticleSphere 
                         mode={mode} 
-                        aiState={aiState} 
+                        aiState={isSessionActive ? aiState : 'idle'} 
                         getVisualizerData={getVisualizerData} 
                         useCartesia={useCartesia} 
                         guidanceMode={guidanceMode}
@@ -763,18 +763,20 @@ const VoiceSessionPage = () => {
                             <div className="flex items-center space-x-1.5">
                                 <span 
                                     className={`w-2 h-2 rounded-full ${
+                                        (!isSessionActive || aiState === 'idle') ? '' :
                                         aiState === 'speaking' ? 'animate-pulse' :
                                         aiState === 'thinking' ? 'animate-ping' : ''
                                     }`}
                                     style={{
                                         backgroundColor: 
+                                            (!isSessionActive || aiState === 'idle') ? 'var(--text-muted)' :
                                             aiState === 'speaking' ? 'var(--mode-playful)' :
                                             aiState === 'thinking' ? 'var(--mode-focused)' :
                                             aiState === 'listening' ? 'var(--mode-casual)' : 'var(--text-muted)'
                                     }}
                                 />
                                 <span className="text-xs font-medium capitalize" style={{ color: 'var(--text-primary)' }}>
-                                    {aiState === 'idle' ? 'Ready' : 
+                                    {(!isSessionActive || aiState === 'idle') ? 'Ready' : 
                                      aiState === 'listening' ? 'Listening' :
                                      aiState === 'thinking' ? 'Thinking' : 'Speaking'}
                                 </span>
