@@ -8,12 +8,19 @@ class AudioPlayer {
         this.isBuffering = true;
         this.lastChunkTime = 0;
         this.leftoverBytes = null;
+        this.analyser = null;
+        this.dataArray = null;
     }
 
     init() {
         if (!this.context) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.context = new AudioContext({ sampleRate: 24000 });
+            this.analyser = this.context.createAnalyser();
+            this.analyser.fftSize = 256;
+            this.analyser.smoothingTimeConstant = 0.8;
+            this.analyser.connect(this.context.destination);
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
         }
         if (this.context.state === 'suspended') {
             this.context.resume();
@@ -22,6 +29,38 @@ class AudioPlayer {
 
     get isPlaying() {
         return this.activeSources.length > 0 || this.playQueue.length > 0;
+    }
+
+    getAudioData() {
+        if (!this.analyser || !this.isPlaying) {
+            return { volume: 0, bass: 0, mid: 0, treble: 0, frequencyData: null };
+        }
+        if (!this.dataArray) {
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        }
+        this.analyser.getByteFrequencyData(this.dataArray);
+
+        let sum = 0;
+        let bassSum = 0;
+        let midSum = 0;
+        let trebleSum = 0;
+        const len = this.dataArray.length; // 128 bins
+
+        for (let i = 0; i < len; i++) {
+            const val = this.dataArray[i];
+            sum += val;
+            if (i < 16) bassSum += val;
+            else if (i < 64) midSum += val;
+            else trebleSum += val;
+        }
+
+        return {
+            volume: (sum / len) / 255,
+            bass: (bassSum / 16) / 255,
+            mid: (midSum / 48) / 255,
+            treble: (trebleSum / 64) / 255,
+            frequencyData: this.dataArray
+        };
     }
 
     async enqueueChunk(base64Audio, textLength) {
@@ -101,7 +140,7 @@ class AudioPlayer {
 
             const source = this.context.createBufferSource();
             source.buffer = nextItem.buffer;
-            source.connect(this.context.destination);
+            source.connect(this.analyser || this.context.destination);
 
             console.log(`[Playback] Scheduling chunk to play at ${this.nextPlayTime.toFixed(3)}s (Current: ${this.context.currentTime.toFixed(3)}s)`);
             source.start(this.nextPlayTime);

@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useVoiceSocket } from '../voice/useVoiceSocket';
 import { useSpeechRecognition } from '../voice/useSpeechRecognition';
 import { audioPlayer } from '../voice/audioPlayer';
+import { useAudioAnalyzer } from '../voice/useAudioAnalyzer';
+import { ParticleSphere } from '../components/ParticleSphere';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Mic, MicOff, Settings2, Activity, Square, Play, Waves } from 'lucide-react';
+import { ArrowLeft, Mic, Settings2, Activity, Square, Headphones, History, X } from 'lucide-react';
 import { ModeIndicatorBar } from '../components/ModeIndicatorBar';
 
 export const SPEED_OPTIONS = [0.8, 1.0, 1.25, 1.5];
@@ -77,6 +79,10 @@ const VoiceSessionPage = () => {
     const [errorMsg, setErrorMsg] = useState('');
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [useCartesia, setUseCartesia] = useState(false); // default to free browser TTS
+    const [transcriptDrawerOpen, setTranscriptDrawerOpen] = useState(false);
+
+    // Audio Visualizer data hook (connects mic and AI audio to ParticleSphere)
+    const { getVisualizerData } = useAudioAnalyzer(isSessionActive);
 
     // Speech Speed State (0.8, 1.0, 1.25, 1.5)
     const [speechSpeed, setSpeechSpeed] = useState(() => {
@@ -511,24 +517,39 @@ const VoiceSessionPage = () => {
         setMetrics(prev => ({ ...prev, ttfb: null, intent: null })); 
     };
 
+    // Latest assistant reply for subtitle display
+    const latestAssistantLog = [...logs].reverse().find(l => l.role === 'assistant');
+    const latestAssistantText = latestAssistantLog ? latestAssistantLog.text.trim() : '';
+
     // Color logic
     const getIntentColor = (intent) => {
         switch(intent) {
-            case 'emotional': return 'text-rose-500';
-            case 'instruction': return 'text-amber-500';
-            case 'question': return 'text-purple-500';
-            default: return 'text-blue-500';
+            case 'emotional': return 'text-rose-400';
+            case 'instruction': return 'text-amber-400';
+            case 'question': return 'text-purple-400';
+            default: return 'text-sky-400';
         }
     };
-    const intentColor = metrics.intent ? getIntentColor(metrics.intent) : 'text-neutral-900';
+    const intentColor = metrics.intent ? getIntentColor(metrics.intent) : 'text-neutral-400';
 
     return (
-        <div className="flex h-screen bg-white text-neutral-900 font-sans overflow-hidden">
+        <div className="relative h-screen w-screen bg-[#090b10] text-neutral-100 font-sans overflow-hidden flex flex-col justify-between selection:bg-sky-500/30">
             
-            {/* Header */}
-            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20 bg-gradient-to-b from-white via-white/80 to-transparent">
-                <Link to="/chats" className="flex items-center space-x-2 text-neutral-400 hover:text-neutral-900 transition-colors">
-                    <ArrowLeft size={20} /> <span>Exit</span>
+            {/* Subtle Ambient Radial Vignette behind the sphere */}
+            <div 
+                className="absolute inset-0 pointer-events-none z-0 opacity-40 transition-opacity duration-1000"
+                style={{
+                    background: 'radial-gradient(circle at 50% 48%, rgba(30, 41, 59, 0.4) 0%, rgba(9, 11, 16, 0.95) 70%, rgba(9, 11, 16, 1) 100%)'
+                }}
+            />
+
+            {/* Header: Minimal, floating, unobtrusive */}
+            <header className="relative z-30 px-6 py-5 flex justify-between items-center bg-gradient-to-b from-[#090b10]/90 via-[#090b10]/50 to-transparent">
+                <Link 
+                    to="/chats" 
+                    className="flex items-center space-x-2 text-neutral-400 hover:text-white transition-all text-xs font-medium tracking-wider uppercase px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md shadow-xs"
+                >
+                    <ArrowLeft size={15} /> <span>Exit</span>
                 </Link>
 
                 {/* Persistent Mode Indicator Bar with Lock/Unlock */}
@@ -540,94 +561,120 @@ const VoiceSessionPage = () => {
                 />
 
                 <div className="flex items-center space-x-2">
-                    {/* Quick Speed Button */}
+                    {/* Headphones Advisory (subtle pill) */}
+                    <div 
+                        className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-neutral-400 text-xs font-medium backdrop-blur-md"
+                        title="Use headphones for optimal voice recognition and echo cancellation"
+                    >
+                        <Headphones size={13} className="text-neutral-400" />
+                        <span>Headphones recommended</span>
+                    </div>
+
+                    {/* Quick Speed Cycle Pill */}
                     <button
                         onClick={() => {
                             const nextIdx = (SPEED_OPTIONS.indexOf(speechSpeed) + 1) % SPEED_OPTIONS.length;
                             handleSpeedChange(SPEED_OPTIONS[nextIdx]);
                         }}
                         title="Speech Speed - click to cycle (0.8x, 1x, 1.25x, 1.5x)"
-                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200/60 text-neutral-700 text-xs font-medium transition-all shadow-xs cursor-pointer"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 text-xs font-medium transition-all shadow-xs cursor-pointer backdrop-blur-md"
                     >
                         <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Speed</span>
-                        <span className="font-semibold text-neutral-900">{speechSpeed}x</span>
+                        <span className="font-semibold text-white">{speechSpeed}x</span>
+                    </button>
+
+                    {/* Transcript Peek Button */}
+                    <button
+                        onClick={() => setTranscriptDrawerOpen(!transcriptDrawerOpen)}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 text-xs font-medium transition-all shadow-xs cursor-pointer backdrop-blur-md"
+                        title="View conversation history"
+                    >
+                        <History size={13} className="text-neutral-300" />
+                        <span className="hidden md:inline">History</span>
                     </button>
 
                     {errorMsg && (
-                        <div className="text-red-500 text-sm font-medium">{errorMsg}</div>
+                        <div className="text-red-400 text-xs font-medium px-2.5 py-1 rounded-full bg-red-950/50 border border-red-800/40">{errorMsg}</div>
+                    )}
+                </div>
+            </header>
+
+            {/* Central Visual Centerpiece: The Audio-Reactive 3D Particle Sphere */}
+            <main className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                <div className="w-full h-full max-w-5xl max-h-[82vh] relative flex items-center justify-center">
+                    <ParticleSphere 
+                        mode={mode} 
+                        aiState={aiState} 
+                        getVisualizerData={getVisualizerData} 
+                        useCartesia={useCartesia} 
+                    />
+                </div>
+            </main>
+
+            {/* Lower-Middle: Minimal Floating Subtitles / Live Captions */}
+            <div className="relative z-20 px-6 pb-32 flex flex-col items-center justify-end pointer-events-none select-none">
+                <div className="max-w-2xl w-full flex flex-col items-center text-center space-y-2">
+                    {interimText ? (
+                        <div className="animate-in fade-in zoom-in-95 duration-200">
+                            <span className="inline-block px-4 py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 text-base md:text-xl font-light text-sky-300 tracking-wide animate-pulse shadow-lg">
+                                "{interimText}"
+                            </span>
+                        </div>
+                    ) : latestAssistantText ? (
+                        <div className="animate-in fade-in duration-300 max-w-xl">
+                            <p className="text-base md:text-lg font-light text-neutral-200/90 leading-relaxed tracking-normal drop-shadow-md line-clamp-3">
+                                "{latestAssistantText}"
+                            </p>
+                        </div>
+                    ) : !isSessionActive ? (
+                        <div className="text-xs tracking-widest uppercase font-medium text-neutral-400/80 animate-in fade-in duration-500">
+                            Tap the microphone to begin session
+                        </div>
+                    ) : (
+                        <div className="flex items-center space-x-2 text-xs tracking-widest uppercase font-medium text-neutral-400/80">
+                            <span className="w-2 h-2 rounded-full bg-sky-400/80 animate-ping"></span>
+                            <span>Listening... speak anytime</span>
+                        </div>
                     )}
                 </div>
             </div>
 
-            {/* Main Chat Canvas */}
-            <div className="flex-1 overflow-y-auto px-6 pb-56 pt-24 max-w-4xl mx-auto w-full">
-                {logs.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-neutral-300">
-                        <Waves size={48} className="mb-4 opacity-50" />
-                        <p className="font-light tracking-wide">Start a session below to begin.</p>
-                    </div>
-                )}
-                
-                <div className="space-y-8">
-                    {logs.map((log, i) => (
-                        <div key={i} className={`flex flex-col ${log.role === 'user' ? 'items-end' : log.role === 'system' ? 'items-center' : 'items-start'}`}>
-                            {log.role === 'system' ? (
-                                <div className="px-4 py-1 rounded-full bg-neutral-100 text-neutral-400 text-xs tracking-wider uppercase font-medium">
-                                    {log.text}
-                                </div>
-                            ) : (
-                                <div className={`max-w-[85%] text-xl md:text-2xl font-light leading-relaxed tracking-tight ${log.role === 'user' ? 'text-neutral-400 text-right' : 'text-neutral-900'}`}>
-                                    {log.text}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                    {interimText && (
-                        <div className="flex flex-col items-end opacity-60">
-                            <div className="max-w-[85%] text-xl md:text-2xl font-light leading-relaxed tracking-tight text-neutral-400 text-right animate-pulse">
-                                {interimText}
-                            </div>
-                        </div>
-                    )}
-                    <div ref={logsEndRef} />
-                </div>
-            </div>
-
-            {/* Dynamic Island / Bottom Control Bar */}
-            <div className="absolute bottom-10 left-0 right-0 flex justify-center px-4 pointer-events-none z-20">
-                <div className="bg-white/80 backdrop-blur-xl border border-neutral-200 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.08)] pointer-events-auto transition-all duration-500 ease-out flex flex-col overflow-hidden w-full max-w-lg">
+            {/* Floating Glassmorphic Bottom Island / Control Bar */}
+            <footer className="absolute bottom-7 left-0 right-0 flex justify-center px-4 pointer-events-none z-30">
+                <div className="bg-neutral-900/85 backdrop-blur-2xl border border-white/10 rounded-[2.2rem] shadow-[0_16px_50px_rgba(0,0,0,0.7)] pointer-events-auto transition-all duration-500 ease-out flex flex-col overflow-hidden w-full max-w-lg">
                     
-                    {/* Collapsible Details Panel (slides down from inside the pill when opened) */}
-                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${detailsOpen && isSessionActive ? 'max-h-[30rem] border-b border-neutral-100' : 'max-h-0'}`}>
-                        <div className="p-5 bg-neutral-50/50 flex flex-col justify-around items-center space-y-4">
+                    {/* Collapsible Details Panel */}
+                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${detailsOpen && isSessionActive ? 'max-h-[30rem] border-b border-white/10' : 'max-h-0'}`}>
+                        <div className="p-5 bg-black/40 flex flex-col justify-around items-center space-y-4">
+                            {/* Metrics Row */}
                             <div className="flex w-full justify-around items-center">
                                 <div className="text-center">
                                     <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Latency</div>
-                                    <div className="text-lg text-neutral-800 font-light">{metrics.ttfb ? `${metrics.ttfb}s` : '---'}</div>
+                                    <div className="text-lg text-white font-light">{metrics.ttfb ? `${metrics.ttfb}s` : '---'}</div>
                                 </div>
-                                <div className="w-px h-10 bg-neutral-200"></div>
+                                <div className="w-px h-10 bg-white/10"></div>
                                 <div className="text-center">
                                     <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Intent</div>
                                     <div className={`text-sm font-medium ${intentColor} capitalize`}>{metrics.intent ? metrics.intent.replace('_', ' ') : '---'}</div>
                                 </div>
-                                <div className="w-px h-10 bg-neutral-200"></div>
+                                <div className="w-px h-10 bg-white/10"></div>
                                 <div className="text-center">
                                     <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold mb-1">Mode</div>
-                                    <div className="text-sm font-medium text-neutral-800 capitalize">{mode} {isLocked ? '(Locked)' : ''}</div>
+                                    <div className="text-sm font-medium text-white capitalize">{mode} {isLocked ? '(Locked)' : ''}</div>
                                 </div>
                             </div>
 
                             {/* Voice Engine Toggle */}
-                            <div className="w-full flex items-center justify-between bg-neutral-100 p-1.5 rounded-full">
+                            <div className="w-full flex items-center justify-between bg-white/5 border border-white/10 p-1.5 rounded-full">
                                 <button 
                                     onClick={() => setUseCartesia(false)}
-                                    className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${!useCartesia ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${!useCartesia ? 'bg-white/15 text-white shadow-xs font-semibold' : 'text-neutral-400 hover:text-white'}`}
                                 >
                                     Browser Voice (Free)
                                 </button>
                                 <button 
                                     onClick={() => setUseCartesia(true)}
-                                    className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${useCartesia ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    className={`flex-1 text-xs font-medium py-1.5 rounded-full transition-colors ${useCartesia ? 'bg-white/15 text-white shadow-xs font-semibold' : 'text-neutral-400 hover:text-white'}`}
                                 >
                                     Cartesia (Premium)
                                 </button>
@@ -635,13 +682,13 @@ const VoiceSessionPage = () => {
 
                             {/* Speech Speed Selector */}
                             <div className="w-full flex items-center justify-between px-1">
-                                <span className="text-xs text-neutral-500 font-medium">Speed:</span>
-                                <div className="flex items-center space-x-1.5 bg-neutral-100 p-1 rounded-full">
+                                <span className="text-xs text-neutral-400 font-medium">Speed:</span>
+                                <div className="flex items-center space-x-1.5 bg-white/5 border border-white/10 p-1 rounded-full">
                                     {SPEED_OPTIONS.map((s) => (
                                         <button
                                             key={s}
                                             onClick={() => handleSpeedChange(s)}
-                                            className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${speechSpeed === s ? 'bg-white shadow-sm text-neutral-900 font-semibold' : 'text-neutral-500 hover:text-neutral-800'}`}
+                                            className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${speechSpeed === s ? 'bg-white/20 text-white font-semibold shadow-xs' : 'text-neutral-400 hover:text-white'}`}
                                         >
                                             {s}x
                                         </button>
@@ -649,7 +696,7 @@ const VoiceSessionPage = () => {
                                 </div>
                             </div>
 
-                            {/* Browser Voice Selector Dropdown (when Browser Voice is active) */}
+                            {/* Browser Voice Selector Dropdown */}
                             {!useCartesia && availableVoices.length > 0 && (
                                 <div className="w-full flex flex-col space-y-1.5 px-1">
                                     <div className="flex justify-between items-center text-[11px] text-neutral-400 font-medium">
@@ -659,10 +706,10 @@ const VoiceSessionPage = () => {
                                     <select
                                         value={selectedVoiceName}
                                         onChange={(e) => handleVoiceChange(e.target.value)}
-                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-1.5 text-xs text-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-400 truncate"
+                                        className="w-full bg-neutral-800/90 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-400 truncate"
                                     >
                                         {availableVoices.map((v) => (
-                                            <option key={v.name} value={v.name}>
+                                            <option key={v.name} value={v.name} className="bg-neutral-900 text-white">
                                                 {(v.name.includes('Natural') || v.name.includes('Neural')) ? '✨ ' : ''}{v.name} ({v.lang})
                                             </option>
                                         ))}
@@ -672,31 +719,39 @@ const VoiceSessionPage = () => {
                         </div>
                     </div>
 
-                    {/* Main Pill Controls */}
+                    {/* Main Bar Controls */}
                     <div className="flex items-center justify-between p-2 pl-4">
                         
                         {/* Status / Toggle Details */}
                         <button 
                             onClick={() => setDetailsOpen(!detailsOpen)}
-                            className="flex items-center space-x-3 hover:bg-neutral-100 p-3 rounded-full transition-colors"
+                            className="flex items-center space-x-2.5 hover:bg-white/10 px-3 py-2 rounded-full transition-colors"
                             disabled={!isSessionActive}
+                            title="Toggle Telemetry & Voice Settings"
                         >
-                            <Settings2 size={18} className="text-neutral-400" />
-                            <span className={`text-sm font-medium ${isSessionActive ? intentColor : 'text-neutral-400'}`}>
-                                {aiState === 'idle' ? 'Ready' : 
-                                 aiState === 'listening' ? 'Listening...' :
-                                 aiState === 'thinking' ? 'Thinking...' : 'Speaking'}
-                            </span>
+                            <Settings2 size={16} className="text-neutral-400" />
+                            <div className="flex items-center space-x-1.5">
+                                <span className={`w-2 h-2 rounded-full ${
+                                    aiState === 'speaking' ? 'bg-emerald-400 animate-pulse' :
+                                    aiState === 'thinking' ? 'bg-amber-400 animate-ping' :
+                                    aiState === 'listening' ? 'bg-sky-400' : 'bg-neutral-500'
+                                }`}></span>
+                                <span className="text-xs font-medium text-neutral-300 capitalize">
+                                    {aiState === 'idle' ? 'Ready' : 
+                                     aiState === 'listening' ? 'Listening' :
+                                     aiState === 'thinking' ? 'Thinking' : 'Speaking'}
+                                </span>
+                            </div>
                         </button>
 
                         {/* Text Input (Visible when active) */}
-                        <form onSubmit={handleTextSubmit} className={`flex-1 px-4 transition-all duration-300 ${isSessionActive ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <form onSubmit={handleTextSubmit} className={`flex-1 px-3 transition-all duration-300 ${isSessionActive ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                             <input 
                                 type="text" 
                                 value={textInput}
                                 onChange={(e) => setTextInput(e.target.value)}
                                 placeholder="Type a message..."
-                                className="w-full bg-transparent border-none outline-none text-sm text-neutral-700 placeholder-neutral-400 focus:ring-0"
+                                className="w-full bg-white/5 border border-white/10 rounded-full px-3.5 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-sky-400 transition-all"
                                 disabled={!isSessionActive}
                             />
                         </form>
@@ -704,42 +759,96 @@ const VoiceSessionPage = () => {
                         {/* Action Buttons */}
                         <div className="flex items-center space-x-2">
                             {isSessionActive && !textInput && (
-                                <div className="flex space-x-1 px-4 pointer-events-none">
+                                <div className="flex space-x-1 px-3 pointer-events-none">
                                     {aiState === 'listening' ? (
-                                        <div className="flex items-center h-8 space-x-1">
-                                            <div className="w-1.5 h-3 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
-                                            <div className="w-1.5 h-6 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
-                                            <div className="w-1.5 h-4 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
+                                        <div className="flex items-center h-6 space-x-1">
+                                            <div className="w-1 h-2 bg-sky-400 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
+                                            <div className="w-1 h-4 bg-sky-400 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
+                                            <div className="w-1 h-2.5 bg-sky-400 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
                                         </div>
                                     ) : aiState === 'speaking' ? (
-                                        <div className="flex items-center h-8 space-x-1">
-                                            <div className="w-1.5 h-5 bg-neutral-900 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                                            <div className="w-1.5 h-8 bg-neutral-900 rounded-full animate-bounce" style={{animationDelay: '100ms'}}></div>
-                                            <div className="w-1.5 h-4 bg-neutral-900 rounded-full animate-bounce" style={{animationDelay: '200ms'}}></div>
-                                            <div className="w-1.5 h-6 bg-neutral-900 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                                        <div className="flex items-center h-6 space-x-1">
+                                            <div className="w-1 h-3 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                                            <div className="w-1 h-5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '100ms'}}></div>
+                                            <div className="w-1 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '200ms'}}></div>
+                                            <div className="w-1 h-4 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                                         </div>
                                     ) : aiState === 'thinking' ? (
-                                        <Activity size={20} className="text-neutral-400 animate-spin" />
+                                        <Activity size={18} className="text-amber-400 animate-spin" />
                                     ) : null}
                                 </div>
                             )}
 
                             <button 
                                 onClick={isSessionActive ? handleStopSession : handleStartSession}
-                                className={`flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300 ${isSessionActive ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' : 'bg-neutral-900 text-white shadow-lg hover:scale-105'}`}
+                                className={`flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 ${
+                                    isSessionActive 
+                                        ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30' 
+                                        : 'bg-white text-neutral-900 shadow-[0_0_20px_rgba(255,255,255,0.25)] hover:scale-105'
+                                }`}
+                                title={isSessionActive ? "Stop voice session" : "Start voice session"}
                             >
-                                {isSessionActive ? <Square size={16} fill="currentColor" /> : <Mic size={20} />}
+                                {isSessionActive ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
                             </button>
                         </div>
                     </div>
 
                 </div>
-            </div>
+            </footer>
 
-            {/* Ambient Background Glow (Subtle) */}
-            {aiState === 'speaking' && (
-                <div className={`fixed inset-0 opacity-5 pointer-events-none transition-opacity duration-1000 ${intentColor.replace('text-', 'bg-')}`}></div>
+            {/* Slide-Over Conversation History Drawer */}
+            {transcriptDrawerOpen && (
+                <div 
+                    className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setTranscriptDrawerOpen(false)}
+                >
+                    <div 
+                        className="w-full max-w-md bg-neutral-900/95 border-l border-white/10 h-full p-6 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 pointer-events-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center pb-4 border-b border-white/10">
+                            <div className="flex items-center space-x-2">
+                                <History size={16} className="text-neutral-400" />
+                                <h3 className="text-sm font-semibold text-white tracking-wide">Transcript History</h3>
+                            </div>
+                            <button 
+                                onClick={() => setTranscriptDrawerOpen(false)}
+                                className="p-1.5 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+                            {logs.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-neutral-500 text-xs">
+                                    No messages in current session yet.
+                                </div>
+                            ) : (
+                                logs.map((log, i) => (
+                                    <div key={i} className={`flex flex-col ${log.role === 'user' ? 'items-end' : log.role === 'system' ? 'items-center' : 'items-start'}`}>
+                                        {log.role === 'system' ? (
+                                            <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-neutral-400 text-[11px] tracking-wider uppercase font-medium">
+                                                {log.text}
+                                            </div>
+                                        ) : (
+                                            <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-xs font-light leading-relaxed ${
+                                                log.role === 'user' 
+                                                    ? 'bg-white/10 text-neutral-200 rounded-br-none' 
+                                                    : 'bg-sky-950/40 border border-sky-500/20 text-sky-100 rounded-bl-none'
+                                            }`}>
+                                                {log.text}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                            <div ref={logsEndRef} />
+                        </div>
+                    </div>
+                </div>
             )}
+
         </div>
     );
 };
